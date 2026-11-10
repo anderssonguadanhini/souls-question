@@ -1,34 +1,44 @@
 
+#ifndef FLAMECHAOS_H
+#define FLAMECHAOS_H
 
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
+// Conteúdo do header
 
-    typedef enum{ fácil = 0, médio, difícil, muitodifícil} dificuldade;
+// Definição dos níveis de dificuldade
+typedef enum
+{
+    FACIL = 0,
+    MEDIO,
+    DIFICIL,
+    MUITO_DIFICIL
+} Dificuldade;
 
-    typedef struct 
-    {
-     char enunciado[200];
+// Estrutura das perguntas
+typedef struct
+{
+    char enunciado[200];
     char alternativas[4][100];
-     char correta[1];
-     dificuldade nivel;
-    }Pergunta;
-    
-    int main()
-    {
-       int capaPERGNTA = 15. tamPERGNTA = 0;
-            Pergunta * Cadastro (Pergunta*) malloc(capaPERGNTA* sizeof(Pergunta));
-            if (Cadastro == NULL)
-            {
-                printf("faltou memoria");
-                    exit(EXIT_FAILURE);
-            }
-            
-                if (tamPERGNTA == capaPERGNTA )
-                {
-                    capaPERGNTA += 2;
-                }
-                
-        return 0;
-    }
-    
+    char correta;
+    Dificuldade nivel;
+} Pergunta;
+
+// Protótipos das funções
+const char *obterNomeDificuldade(Dificuldade d);
+
+void cadastrarPergunta(
+    Pergunta **lista,
+    int *tam,
+    int *capacidade);
+
+void listarPerguntas(Pergunta *lista, int tam);
+
+void pesquisarPergunta(Pergunta *lista, int tam);
+
+void alterarPergunta(Pergunta *lista, int tam);
+
+void excluirPergunta(
+    Pergunta **lista,
+    int *tam,
+    int *capacidade);
+
+#endif // FLAMECHAOS_H
