@@ -1,10 +1,21 @@
-
 #include <stdio.h>
 #include <stdlib.h>
+#include "raylib.h"
 #include "flameChaos.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 int main(void)
 {
+
+#ifdef _WIN32
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD dwMode = 0;
+    GetConsoleMode(hOut, &dwMode);
+    SetConsoleMode(hOut, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+#endif
 
     int capacidade = 5;
     int tamanho = 0;
@@ -16,6 +27,9 @@ int main(void)
         printf("Erro: Falha ao alocar memoria!\n");
         return EXIT_FAILURE;
     }
+
+    // Carrega os dados salvos no HD ao iniciar o programa
+    carregarPerguntas(&listaPerguntas, &tamanho, &capacidade);
 
     int opcao;
 
@@ -82,7 +96,9 @@ int main(void)
             break;
 
         case 0:
-            printf("\nEncerrando FlameChaos...\n");
+            printf("\nSalvando dados...\n");
+            salvarPerguntas(listaPerguntas, tamanho);
+            printf("Encerrando FlameChaos...\n");
             break;
 
         default:
