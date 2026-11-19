@@ -1,42 +1,209 @@
+/**
+ * @file flameChaos.c
+ * @brief Implementação do menu e do cadastro de perguntas.
+ *
+ * Todas as funções trabalham sobre o Banco (vetor dinâmico) lido do
+ * CSV/binário por jogo_demilhao.c. Nenhuma variável global é usada.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "raylib.h"
 #include "flameChaos.h"
 
 #ifdef _WIN32
-#include <windows.h>
-#define LIMPAR_TELA() system("cls")
-#else
-#include <unistd.h>
-#define LIMPAR_TELA() system("clear")
+#include <windows.h> /* Beep */
 #endif
 
-// Limpa o buffer do teclado após leituras com scanf
-static void limparBuffer(void)
+/** Capacidade inicial do vetor e tamanho mínimo para ele encolher. */
+#define CAPACIDADE_INICIAL 16
+
+/* ---------------------------------------------------------------
+ * Funções auxiliares (visíveis só neste arquivo)
+ * --------------------------------------------------------------- */
+
+/** @brief Lê uma linha do teclado sem o Enter. Retorna 0 se der EOF. */
+static int lerLinha(const char *mensagem, char *destino, size_t tam)
 {
-    int c;
-    while ((c = getchar()) != '\n' && c != EOF)
-        ;
+    printf("%s", mensagem);
+    fflush(stdout);
+
+    if (fgets(destino, (int)tam, stdin) == NULL)
+    {
+        return 0;
+    }
+
+    size_t tamanhoLido = strcspn(destino, "\r\n");
+    if (destino[tamanhoLido] == '\0' && tamanhoLido == tam - 1)
+    {
+        // a linha era maior que o espaço disponível: descarta o resto
+        int c;
+        while ((c = getchar()) != '\n' && c != EOF)
+        {
+        }
+    }
+    destino[tamanhoLido] = '\0';
+    return 1;
 }
 
-const char *obterNomeDificuldade(Dificuldade d)
+/** @brief Lê um texto não vazio e sem vírgula (a vírgula quebraria o CSV). */
+static int lerTexto(const char *mensagem, char *destino, size_t tam)
 {
-    switch (d)
+    while (1)
     {
-    case FACIL:
-        return "Facil";
-    case MEDIO:
-        return "Medio";
-    case DIFICIL:
-        return "Dificil";
-    case MUITO_DIFICIL:
-        return "Muito Dificil";
-    default:
-        return "Desconhecido";
+        if (!lerLinha(mensagem, destino, tam))
+        {
+            return 0;
+        }
+        if (destino[0] == '\0')
+        {
+            tocarSom(3);
+            printf("%s[!] O campo não pode ficar vazio.%s\n", COR_VERMELHO, COR_RESET);
+        }
+        else if (strchr(destino, ',') != NULL)
+        {
+            tocarSom(3);
+            printf("%s[!] Não use vírgula (ela separa as colunas do CSV).%s\n",
+                   COR_VERMELHO, COR_RESET);
+        }
+        else
+        {
+            return 1;
+        }
     }
 }
+
+/** @brief Lê a letra da alternativa correta (A a D). Retorna 0 se der EOF. */
+static int lerLetra(const char *mensagem, char *letra)
+{
+    char linha[16];
+    while (1)
+    {
+        if (!lerLinha(mensagem, linha, sizeof(linha)))
+        {
+            return 0;
+        }
+        char c = (char)toupper((unsigned char)linha[0]);
+        if (linha[0] != '\0' && linha[1] == '\0' && c >= 'A' && c <= 'D')
+        {
+            *letra = c;
+            return 1;
+        }
+        tocarSom(3);
+        printf("%s[!] Digite apenas A, B, C ou D.%s\n", COR_VERMELHO, COR_RESET);
+    }
+}
+
+/** @brief Lê um nível de 1 a 5. Retorna 0 se der EOF. */
+static int lerNivel(const char *mensagem, int *nivel)
+{
+    while (1)
+    {
+        int r = lerInteiro(mensagem, nivel);
+        if (r == -1)
+        {
+            return 0;
+        }
+        if (r == 1 && *nivel >= NIVEL_MIN && *nivel <= NIVEL_MAX)
+        {
+            return 1;
+        }
+        tocarSom(3);
+        printf("%s[!] Digite um número de %d a %d.%s\n", COR_VERMELHO, NIVEL_MIN, NIVEL_MAX, COR_RESET);
+    }
+}
+
+/** @brief Calcula o próximo ID livre (maior ID existente + 1). */
+static int proximoId(const Banco *banco)
+{
+    int maior = 0;
+    for (int i = 0; i < banco->quantidade; i++)
+    {
+        if (banco->dados[i].id > maior)
+        {
+            maior = banco->dados[i].id;
+        }
+    }
+    return maior + 1;
+}
+
+/** @brief Pede todos os campos de uma pergunta. Retorna 0 se der EOF. */
+static int preencherPergunta(Perguntas *p)
+{
+    static const char letras[4] = {'A', 'B', 'C', 'D'};
+    char mensagem[40];
+
+    if (!lerTexto("Jogo de origem: ", p->jogo, sizeof(p->jogo)) ||
+        !lerTexto("Enunciado: ", p->enunciado, sizeof(p->enunciado)))
+    {
+        return 0;
+    }
+    for (int i = 0; i < 4; i++)
+    {
+        snprintf(mensagem, sizeof(mensagem), "Alternativa [%c]: ", letras[i]);
+        if (!lerTexto(mensagem, p->alternativa[i], sizeof(p->alternativa[i])))
+        {
+            return 0;
+        }
+    }
+    if (!lerLetra("Alternativa correta (A, B, C ou D): ", &p->correta))
+    {
+        return 0;
+    }
+    return lerNivel("Nível (1-Muito Fácil, 2-Fácil, 3-Médio, 4-Difícil, 5-Muito Difícil): ", &p->nivel);
+}
+
+/** @brief Imprime o enunciado e as alternativas de uma pergunta. */
+static void imprimirPergunta(const Perguntas *p, int destacarCorreta)
+{
+    static const char letras[4] = {'A', 'B', 'C', 'D'};
+    printf("  %s\n\n", p->enunciado);
+    for (int i = 0; i < 4; i++)
+    {
+        if (destacarCorreta && p->correta == letras[i])
+        {
+            printf("  %s--> [%c] %s  (CORRETA!)%s\n", COR_VERDE, letras[i], p->alternativa[i], COR_RESET);
+        }
+        else
+        {
+            printf("      [%c] %s\n", letras[i], p->alternativa[i]);
+        }
+    }
+}
+
+/** @brief Mostra quantas perguntas existem por nível e o mínimo exigido. */
+static void mostrarResumoNiveis(const Banco *banco)
+{
+    // mínimo de perguntas por nível exigido no enunciado do projeto
+    static const int minimo[NIVEL_MAX + 1] = {0, 20, 20, 15, 15, 10};
+    int contagem[NIVEL_MAX + 1] = {0};
+
+    for (int i = 0; i < banco->quantidade; i++)
+    {
+        int n = banco->dados[i].nivel;
+        if (n >= NIVEL_MIN && n <= NIVEL_MAX)
+        {
+            contagem[n]++;
+        }
+    }
+
+    printf("\n%sResumo por nível (atual / mínimo):%s\n", COR_BRANCO_NEGRITO, COR_RESET);
+    for (int n = NIVEL_MIN; n <= NIVEL_MAX; n++)
+    {
+        printf("  %s%-14s%s %3d / %-3d", obterCorNivel(n), textoDoNivel(n), COR_RESET,
+               contagem[n], minimo[n]);
+        if (contagem[n] < minimo[n])
+        {
+            printf("  %s(faltam %d)%s", COR_AMARELO, minimo[n] - contagem[n], COR_RESET);
+        }
+        printf("\n");
+    }
+}
+
+/* ---------------------------------------------------------------
+ * Funções públicas
+ * --------------------------------------------------------------- */
 
 void tocarSom(int tipo)
 {
@@ -67,281 +234,222 @@ void tocarSom(int tipo)
 #endif
 }
 
-const char *obterCorDificuldade(Dificuldade d)
+const char *obterCorNivel(int nivel)
 {
-    switch (d)
+    switch (nivel)
     {
-    case FACIL:
+    case 1:
         return COR_VERDE;
-    case MEDIO:
+    case 2:
+        return COR_CIANO;
+    case 3:
         return COR_AMARELO;
-    case DIFICIL:
+    case 4:
         return COR_VERMELHO;
-    case MUITO_DIFICIL:
+    case 5:
         return COR_ROXO;
     default:
         return COR_RESET;
     }
 }
 
-void salvarPerguntas(Pergunta *lista, int tam)
+int lerInteiro(const char *mensagem, int *valor)
 {
-    FILE *arquivo = fopen(ARQUIVO_DADOS, "wb");
-    if (arquivo == NULL)
+    char linha[64];
+    if (!lerLinha(mensagem, linha, sizeof(linha)))
     {
-        printf("%s[!] Erro ao abrir '%s' para salvamento!%s\n", COR_VERMELHO, ARQUIVO_DADOS, COR_RESET);
-        tocarSom(3);
-        return;
+        return -1;
     }
 
-    fwrite(&tam, sizeof(int), 1, arquivo);
-    if (tam > 0)
+    char *fim;
+    long numero = strtol(linha, &fim, 10);
+    if (fim == linha)
     {
-        fwrite(lista, sizeof(Pergunta), tam, arquivo);
+        return 0; // não começou com número
+    }
+    while (isspace((unsigned char)*fim))
+    {
+        fim++;
+    }
+    if (*fim != '\0')
+    {
+        return 0; // sobrou texto depois do número
     }
 
-    fclose(arquivo);
-    printf("%s[OK] %d pergunta(s) salva(s) em '%s'.%s\n", COR_VERDE, tam, ARQUIVO_DADOS, COR_RESET);
+    *valor = (int)numero;
+    return 1;
 }
 
-void carregarPerguntas(Pergunta **lista, int *tam, int *capacidade)
+void cadastrarPergunta(Banco *banco)
 {
-    FILE *arquivo = fopen(ARQUIVO_DADOS, "rb");
-    if (arquivo == NULL)
+    // Se o vetor está cheio, aumenta a capacidade (dobra)
+    if (banco->quantidade >= banco->capacidade)
     {
-        printf("%s[i] Nenhum banco de dados anterior encontrado. Iniciando novo arquivo.%s\n", COR_CIANO, COR_RESET);
-        return;
-    }
-
-    int totalSalvo = 0;
-    if (fread(&totalSalvo, sizeof(int), 1, arquivo) != 1)
-    {
-        fclose(arquivo);
-        return;
-    }
-
-    if (totalSalvo > 0)
-    {
-        if (totalSalvo > *capacidade)
-        {
-            Pergunta *temp = realloc(*lista, totalSalvo * sizeof(Pergunta));
-            if (temp == NULL)
-            {
-                printf("%s[!] Erro de memoria ao carregar dados do disco!%s\n", COR_VERMELHO, COR_RESET);
-                fclose(arquivo);
-                return;
-            }
-            *lista = temp;
-            *capacidade = totalSalvo;
-        }
-
-        size_t lidos = fread(*lista, sizeof(Pergunta), totalSalvo, arquivo);
-        *tam = (int)lidos;
-    }
-
-    fclose(arquivo);
-    printf("%s[OK] %d pergunta(s) carregada(s) de '%s'.%s\n", COR_VERDE, *tam, ARQUIVO_DADOS, COR_RESET);
-}
-
-void cadastrarPergunta(Pergunta **lista, int *tam, int *capacidade)
-{
-    if (*tam >= *capacidade)
-    {
-        int novaCap = (*capacidade) * 2;
-        Pergunta *temp = realloc(*lista, novaCap * sizeof(Pergunta));
+        int novaCapacidade = (banco->capacidade == 0) ? CAPACIDADE_INICIAL : banco->capacidade * 2;
+        Perguntas *temp = realloc(banco->dados, novaCapacidade * sizeof(Perguntas));
         if (temp == NULL)
         {
-            printf("%s[!] Erro ao realocar memoria!%s\n", COR_VERMELHO, COR_RESET);
+            tocarSom(3);
+            printf("%s[!] Erro ao realocar memória!%s\n", COR_VERMELHO, COR_RESET);
             return;
         }
-        *lista = temp;
-        *capacidade = novaCap;
+        banco->dados = temp;
+        banco->capacidade = novaCapacidade;
     }
-
-    Pergunta nova;
-    limparBuffer();
 
     printf("\n--- CADASTRAR NOVA PERGUNTA ---\n");
-    printf("Enunciado: ");
-    fgets(nova.enunciado, sizeof(nova.enunciado), stdin);
-    nova.enunciado[strcspn(nova.enunciado, "\n")] = '\0';
-
-    char letras[4] = {'A', 'B', 'C', 'D'};
-    for (int i = 0; i < 4; i++)
+    Perguntas nova;
+    nova.id = proximoId(banco);
+    if (!preencherPergunta(&nova))
     {
-        printf("Alternativa [%c]: ", letras[i]);
-        fgets(nova.alternativas[i], sizeof(nova.alternativas[i]), stdin);
-        nova.alternativas[i][strcspn(nova.alternativas[i], "\n")] = '\0';
+        return; // entrada fechada: não cadastra pela metade
     }
 
-    do
-    {
-        printf("Alternativa correta (A, B, C ou D): ");
-        scanf(" %c", &nova.correta);
-        nova.correta = (char)toupper(nova.correta);
-    } while (nova.correta < 'A' || nova.correta > 'D');
-
-    int nivel;
-    do
-    {
-        printf("Nivel (0-Facil, 1-Medio, 2-Dificil, 3-Muito Dificil): ");
-        if (scanf("%d", &nivel) != 1)
-        {
-            limparBuffer();
-            nivel = -1;
-        }
-    } while (nivel < 0 || nivel > 3);
-    nova.nivel = (Dificuldade)nivel;
-
-    (*lista)[*tam] = nova;
-    (*tam)++;
+    banco->dados[banco->quantidade] = nova;
+    banco->quantidade++;
     tocarSom(2);
-    printf("%s[OK] Pergunta cadastrada com sucesso!%s\n", COR_VERDE, COR_RESET);
+    printf("%s[OK] Pergunta #%d cadastrada com sucesso!%s\n", COR_VERDE, nova.id, COR_RESET);
 }
 
-void listarPerguntas(Pergunta *lista, int tam)
+void listarPerguntas(const Banco *banco)
 {
-    if (tam == 0)
+    if (banco->quantidade == 0)
     {
+        tocarSom(3);
         printf("\n%s[!] Nenhuma pergunta cadastrada.%s\n", COR_AMARELO, COR_RESET);
         return;
     }
 
-    printf("\n================ LISTA DE PERGUNTAS (%d) ================\n", tam);
-    char letras[4] = {'A', 'B', 'C', 'D'};
-    for (int i = 0; i < tam; i++)
+    static const char letras[4] = {'A', 'B', 'C', 'D'};
+    printf("\n================ LISTA DE PERGUNTAS (%d) ================\n", banco->quantidade);
+    for (int i = 0; i < banco->quantidade; i++)
     {
-        const char *cor = obterCorDificuldade(lista[i].nivel);
-        printf("\n%s[#%d] [%s]%s %s\n", cor, i + 1, obterNomeDificuldade(lista[i].nivel), COR_RESET, lista[i].enunciado);
+        const Perguntas *p = &banco->dados[i];
+        printf("\n%s[#%d] [%s] (%s)%s %s\n", obterCorNivel(p->nivel), p->id,
+               textoDoNivel(p->nivel), p->jogo, COR_RESET, p->enunciado);
         for (int j = 0; j < 4; j++)
         {
-            printf("   [%c] %s\n", letras[j], lista[i].alternativas[j]);
+            printf("   [%c] %s\n", letras[j], p->alternativa[j]);
         }
-        printf("   Correta: %s%c%s\n", COR_VERDE, lista[i].correta, COR_RESET);
+        printf("   Correta: %s%c%s\n", COR_VERDE, p->correta, COR_RESET);
     }
     printf("=========================================================\n");
+    mostrarResumoNiveis(banco);
 }
 
-void pesquisarPergunta(Pergunta *lista, int tam)
+void pesquisarPergunta(const Banco *banco)
 {
-    if (tam == 0)
+    if (banco->quantidade == 0)
     {
         tocarSom(3);
         printf("\n%s[!] Nenhuma pergunta cadastrada no sistema.%s\n", COR_VERMELHO, COR_RESET);
         return;
     }
 
-    int escolhaNivel;
-    LIMPAR_TELA();
+    limparTela();
     printf("%s==================================================%s\n", COR_CIANO, COR_RESET);
     printf("%s       PESQUISAR PERGUNTAS POR DIFICULDADE        %s\n", COR_BRANCO_NEGRITO, COR_RESET);
     printf("%s==================================================%s\n", COR_CIANO, COR_RESET);
-    printf("  %s[0] Facil%s\n", COR_VERDE, COR_RESET);
-    printf("  %s[1] Medio%s\n", COR_AMARELO, COR_RESET);
-    printf("  %s[2] Dificil%s\n", COR_VERMELHO, COR_RESET);
-    printf("  %s[3] Muito Dificil (MODO CHAOS)%s\n", COR_ROXO, COR_RESET);
+    for (int n = NIVEL_MIN; n <= NIVEL_MAX; n++)
+    {
+        printf("  %s[%d] %s%s\n", obterCorNivel(n), n, textoDoNivel(n), COR_RESET);
+    }
     printf("%s==================================================%s\n", COR_CIANO, COR_RESET);
-    printf("Escolha o nivel desejado: ");
 
-    if (scanf("%d", &escolhaNivel) != 1 || escolhaNivel < 0 || escolhaNivel > 3)
+    int nivelBuscado;
+    int leitura = lerInteiro("Escolha o nível desejado: ", &nivelBuscado);
+    if (leitura == -1)
+    {
+        return;
+    }
+    if (leitura != 1 || nivelBuscado < NIVEL_MIN || nivelBuscado > NIVEL_MAX)
     {
         tocarSom(3);
-        printf("\n%s[!] Nivel invalido!%s\n", COR_VERMELHO, COR_RESET);
-        limparBuffer();
+        printf("\n%s[!] Nível inválido!%s\n", COR_VERMELHO, COR_RESET);
         return;
     }
 
-    Dificuldade nivelBuscado = (Dificuldade)escolhaNivel;
-
-    int *indicesEncontrados = malloc(tam * sizeof(int));
-    if (indicesEncontrados == NULL)
+    // Guarda as posições (no vetor) das perguntas do nível escolhido
+    int *indices = malloc(banco->quantidade * sizeof(int));
+    if (indices == NULL)
     {
-        printf("Erro de memoria!\n");
+        tocarSom(3);
+        printf("%s[!] Erro de memória!%s\n", COR_VERMELHO, COR_RESET);
         return;
     }
-
-    int totalEncontradas = 0;
-    for (int i = 0; i < tam; i++)
+    int total = 0;
+    for (int i = 0; i < banco->quantidade; i++)
     {
-        if (lista[i].nivel == nivelBuscado)
+        if (banco->dados[i].nivel == nivelBuscado)
         {
-            indicesEncontrados[totalEncontradas++] = i;
+            indices[total++] = i;
         }
     }
 
-    if (totalEncontradas == 0)
+    if (total == 0)
     {
         tocarSom(3);
-        printf("\n%s[!] Nenhuma pergunta encontrada para o nivel %s.%s\n",
-               COR_AMARELO, obterNomeDificuldade(nivelBuscado), COR_RESET);
-        free(indicesEncontrados);
+        printf("\n%s[!] Nenhuma pergunta encontrada para o nível %s.%s\n",
+               COR_AMARELO, textoDoNivel(nivelBuscado), COR_RESET);
+        free(indices);
         return;
     }
 
-    if (nivelBuscado == MUITO_DIFICIL)
-        tocarSom(4);
-    else
-        tocarSom(1);
+    tocarSom(nivelBuscado == NIVEL_MAX ? 4 : 1);
 
-    int posAtual = 0;
+    const char *corTema = obterCorNivel(nivelBuscado);
+    int posicao = 0;
     int mostrarGabarito = 0;
-    char comando;
-    const char *corTema = obterCorDificuldade(nivelBuscado);
+    char comando = ' ';
 
     do
     {
-        LIMPAR_TELA();
-        int idxReal = indicesEncontrados[posAtual];
-        Pergunta p = lista[idxReal];
+        const Perguntas *p = &banco->dados[indices[posicao]];
 
+        limparTela();
         printf("%s+----------------------------------------------------------+%s\n", corTema, COR_RESET);
-        printf("%s|  FLAME CHAOS - NIVEL: %-15s   [Card %d de %d]  |%s\n",
-               corTema, obterNomeDificuldade(p.nivel), posAtual + 1, totalEncontradas, COR_RESET);
+        printf("%s  FLAME CHAOS - NÍVEL: %s   [Card %d de %d]%s\n",
+               corTema, textoDoNivel(nivelBuscado), posicao + 1, total, COR_RESET);
         printf("%s+----------------------------------------------------------+%s\n", corTema, COR_RESET);
 
         printf("  Progresso: [");
-        for (int i = 0; i < totalEncontradas; i++)
+        for (int i = 0; i < total; i++)
         {
-            if (i == posAtual)
+            if (i == posicao)
+            {
                 printf("%s#%s", corTema, COR_RESET);
+            }
             else
+            {
                 printf("-");
+            }
         }
-        printf("] (ID Geral: #%d)\n\n", idxReal + 1);
+        printf("] (ID: #%d | Jogo: %s)\n\n", p->id, p->jogo);
 
         printf("  %sPERGUNTA:%s\n", COR_BRANCO_NEGRITO, COR_RESET);
-        printf("  %s\n\n", p.enunciado);
-
-        char letras[4] = {'A', 'B', 'C', 'D'};
-        for (int i = 0; i < 4; i++)
-        {
-            if (mostrarGabarito && toupper(p.correta) == letras[i])
-            {
-                printf("  %s--> [%c] %s  (CORRETA!)%s\n",
-                       COR_VERDE, letras[i], p.alternativas[i], COR_RESET);
-            }
-            else
-            {
-                printf("      [%c] %s\n", letras[i], p.alternativas[i]);
-            }
-        }
+        imprimirPergunta(p, mostrarGabarito);
 
         printf("\n%s+----------------------------------------------------------+%s\n", corTema, COR_RESET);
-        printf("  %s[A]%s Anterior  |  %s[D]%s Proxima  |  %s[R]%s Revelar  |  %s[S]%s Sair\n",
+        printf("  %s[A]%s Anterior | %s[D]%s Próxima | %s[R]%s Revelar | %s[S]%s Sair\n",
                COR_CIANO, COR_RESET, COR_CIANO, COR_RESET,
                COR_AMARELO, COR_RESET, COR_VERMELHO, COR_RESET);
-        printf("%s+----------------------------------------------------------+%s\n", corTema, COR_RESET);
-        printf("Comando: ");
 
-        scanf(" %c", &comando);
-        comando = (char)toupper(comando);
+        char linha[16];
+        if (!lerLinha("Comando: ", linha, sizeof(linha)))
+        {
+            comando = 'S'; // entrada fechada: sai
+        }
+        else
+        {
+            comando = (char)toupper((unsigned char)linha[0]);
+        }
 
         switch (comando)
         {
         case 'D':
-            if (posAtual < totalEncontradas - 1)
+            if (posicao < total - 1)
             {
-                posAtual++;
+                posicao++;
                 mostrarGabarito = 0;
                 tocarSom(1);
             }
@@ -350,11 +458,10 @@ void pesquisarPergunta(Pergunta *lista, int tam)
                 tocarSom(3);
             }
             break;
-
         case 'A':
-            if (posAtual > 0)
+            if (posicao > 0)
             {
-                posAtual--;
+                posicao--;
                 mostrarGabarito = 0;
                 tocarSom(1);
             }
@@ -363,120 +470,153 @@ void pesquisarPergunta(Pergunta *lista, int tam)
                 tocarSom(3);
             }
             break;
-
         case 'R':
             mostrarGabarito = !mostrarGabarito;
-            if (mostrarGabarito)
-                tocarSom(2);
-            else
-                tocarSom(1);
+            tocarSom(mostrarGabarito ? 2 : 1);
             break;
-
         case 'S':
             tocarSom(1);
             break;
-
         default:
             tocarSom(3);
             break;
         }
-
     } while (comando != 'S');
 
-    free(indicesEncontrados);
-    LIMPAR_TELA();
+    free(indices);
+    limparTela();
 }
 
-void alterarPergunta(Pergunta *lista, int tam)
+void alterarPergunta(Banco *banco)
 {
-    if (tam == 0)
+    if (banco->quantidade == 0)
     {
+        tocarSom(3);
         printf("\n%s[!] Nenhuma pergunta cadastrada para alterar.%s\n", COR_AMARELO, COR_RESET);
         return;
     }
 
     int id;
-    printf("\nDigite o numero (ID) da pergunta para alterar (1 a %d): ", tam);
-    if (scanf("%d", &id) != 1 || id < 1 || id > tam)
+    int leitura = lerInteiro("\nDigite o número (ID) da pergunta para alterar: ", &id);
+    if (leitura == -1)
     {
-        printf("%s[!] ID invalido!%s\n", COR_VERMELHO, COR_RESET);
-        limparBuffer();
         return;
     }
 
-    int idx = id - 1;
-    limparBuffer();
-
-    printf("Novo enunciado: ");
-    fgets(lista[idx].enunciado, sizeof(lista[idx].enunciado), stdin);
-    lista[idx].enunciado[strcspn(lista[idx].enunciado, "\n")] = '\0';
-
-    char letras[4] = {'A', 'B', 'C', 'D'};
-    for (int i = 0; i < 4; i++)
+    int posicao = -1;
+    for (int i = 0; i < banco->quantidade && leitura == 1; i++)
     {
-        printf("Nova alternativa [%c]: ", letras[i]);
-        fgets(lista[idx].alternativas[i], sizeof(lista[idx].alternativas[i]), stdin);
-        lista[idx].alternativas[i][strcspn(lista[idx].alternativas[i], "\n")] = '\0';
+        if (banco->dados[i].id == id)
+        {
+            posicao = i;
+        }
+    }
+    if (posicao < 0)
+    {
+        tocarSom(3);
+        printf("%s[!] ID inválido!%s\n", COR_VERMELHO, COR_RESET);
+        return;
     }
 
-    do
-    {
-        printf("Nova alternativa correta (A, B, C ou D): ");
-        scanf(" %c", &lista[idx].correta);
-        lista[idx].correta = (char)toupper(lista[idx].correta);
-    } while (lista[idx].correta < 'A' || lista[idx].correta > 'D');
+    printf("\nPergunta atual:\n");
+    imprimirPergunta(&banco->dados[posicao], 1);
+    printf("\n--- NOVOS DADOS ---\n");
 
-    int nivel;
-    do
+    // Preenche uma cópia: se a entrada fechar no meio, o original não é estragado
+    Perguntas nova = banco->dados[posicao];
+    if (!preencherPergunta(&nova))
     {
-        printf("Novo nivel (0-Facil, 1-Medio, 2-Dificil, 3-Muito Dificil): ");
-        if (scanf("%d", &nivel) != 1)
-        {
-            limparBuffer();
-            nivel = -1;
-        }
-    } while (nivel < 0 || nivel > 3);
-    lista[idx].nivel = (Dificuldade)nivel;
+        return;
+    }
+    banco->dados[posicao] = nova;
 
     tocarSom(2);
     printf("%s[OK] Pergunta #%d alterada com sucesso!%s\n", COR_VERDE, id, COR_RESET);
 }
 
-void excluirPergunta(Pergunta **lista, int *tam, int *capacidade)
+void excluirPergunta(Banco *banco)
 {
-    if (*tam == 0)
+    if (banco->quantidade == 0)
     {
+        tocarSom(3);
         printf("\n%s[!] Nenhuma pergunta cadastrada para excluir.%s\n", COR_AMARELO, COR_RESET);
         return;
     }
 
     int id;
-    printf("\nDigite o numero (ID) da pergunta para excluir (1 a %d): ", *tam);
-    if (scanf("%d", &id) != 1 || id < 1 || id > *tam)
+    int leitura = lerInteiro("\nDigite o número (ID) da pergunta para excluir: ", &id);
+    if (leitura == -1)
     {
-        printf("%s[!] ID invalido!%s\n", COR_VERMELHO, COR_RESET);
-        limparBuffer();
         return;
     }
 
-    int idx = id - 1;
-    for (int i = idx; i < (*tam) - 1; i++)
+    int posicao = -1;
+    for (int i = 0; i < banco->quantidade && leitura == 1; i++)
     {
-        (*lista)[i] = (*lista)[i + 1];
+        if (banco->dados[i].id == id)
+        {
+            posicao = i;
+        }
     }
-    (*tam)--;
-
-    if (*tam > 0 && *tam <= (*capacidade) / 4 && *capacidade > 5)
+    if (posicao < 0)
     {
-        int novaCap = (*capacidade) / 2;
-        Pergunta *temp = realloc(*lista, novaCap * sizeof(Pergunta));
+        tocarSom(3);
+        printf("%s[!] ID inválido!%s\n", COR_VERMELHO, COR_RESET);
+        return;
+    }
+
+    printf("\nPergunta a excluir:\n");
+    imprimirPergunta(&banco->dados[posicao], 0);
+    char resposta[8];
+    if (!lerLinha("\nConfirma a exclusão? (S/N): ", resposta, sizeof(resposta)) ||
+        toupper((unsigned char)resposta[0]) != 'S')
+    {
+        printf("Exclusão cancelada.\n");
+        return;
+    }
+
+    // Puxa as perguntas seguintes uma posição para trás
+    for (int i = posicao; i < banco->quantidade - 1; i++)
+    {
+        banco->dados[i] = banco->dados[i + 1];
+    }
+    banco->quantidade--;
+
+    // Se sobrou pouca coisa, diminui o vetor pela metade
+    if (banco->quantidade > 0 && banco->quantidade <= banco->capacidade / 4 &&
+        banco->capacidade > CAPACIDADE_INICIAL)
+    {
+        int novaCapacidade = banco->capacidade / 2;
+        Perguntas *temp = realloc(banco->dados, novaCapacidade * sizeof(Perguntas));
         if (temp != NULL)
         {
-            *lista = temp;
-            *capacidade = novaCap;
+            banco->dados = temp;
+            banco->capacidade = novaCapacidade;
         }
     }
 
     tocarSom(2);
-    printf("%s[OK] Pergunta #%d excluida com sucesso!%s\n", COR_VERDE, id, COR_RESET);
+    printf("%s[OK] Pergunta #%d excluída com sucesso!%s\n", COR_VERDE, id, COR_RESET);
+}
+
+void exportarPerguntas(const Banco *banco)
+{
+    char nome[TAM_CAMINHO];
+    if (!lerLinha("\nNome do arquivo .csv (Enter = perguntas_exportadas.csv): ", nome, sizeof(nome)))
+    {
+        return;
+    }
+    if (nome[0] == '\0')
+    {
+        snprintf(nome, sizeof(nome), "%s", "perguntas_exportadas.csv");
+    }
+
+    if (exportarCSV(banco, nome) != 0)
+    {
+        tocarSom(3);
+        printf("%s[!] Não foi possível criar '%s'.%s\n", COR_VERMELHO, nome, COR_RESET);
+        return;
+    }
+    tocarSom(2);
+    printf("%s[OK] %d pergunta(s) exportada(s) para '%s'.%s\n", COR_VERDE, banco->quantidade, nome, COR_RESET);
 }

@@ -1,0 +1,81 @@
+id,dificuldade,jogo,pergunta,alternativa_a,alternativa_b,alternativa_c,alternativa_d,resposta_correta
+1,Muito Fácil,Dark Souls,Qual estúdio desenvolveu Dark Souls?,Bandai Namco,Capcom,FromSoftware,Square Enix,C
+2,Muito Fácil,Elden Ring,Como se chama o mundo onde se passa Elden Ring?,Ashina,Terras Intermédias,Yharnam,Lordran,B
+3,Muito Fácil,Dark Souls,Qual item é usado para recuperar vida em Dark Souls?,Poção Azul,Erva Verde,Frasco de Estus,Cura Divina,C
+4,Muito Fácil,Dark Souls,Como se chama a moeda e experiência coletada em Dark Souls?,Almas,Ecos de Sangue,Runas,Moedas de Ouro,A
+5,Muito Fácil,Elden Ring,Como se chama a moeda e experiência coletada em Elden Ring?,Sen,Almas,Runas,Ecos de Sangue,C
+6,Muito Fácil,Bloodborne,Qual jogo se passa na cidade de Yharnam?,Nioh,Sekiro,Bloodborne,Dark Souls,C
+7,Muito Fácil,Sekiro,Qual é o protagonista de Sekiro: Shadows Die Twice?,Kratos,Arthur,Geralt,Lobo,D
+8,Muito Fácil,Dark Souls,Onde o jogador descansa e salva o progresso em Dark Souls?,Fogueira,Hospedaria,Altar,Cama,A
+9,Muito Fácil,Dark Souls,Qual mensagem aparece na tela quando o jogador morre em Dark Souls?,DERROTA,YOU DIED,GAME OVER,FALHOU,B
+10,Muito Fácil,Geral,Como é chamado o gênero de jogos inspirados em Dark Souls?,MOBA,Battle Royale,Souls-like,Visual Novel,C
+11,Muito Fácil,Elden Ring,Qual autor de Game of Thrones colaborou no mundo de Elden Ring?,Stephen King,J. R. R. Tolkien,George R. R. Martin,Neil Gaiman,C
+12,Muito Fácil,Sekiro,Em qual cenário se passa Sekiro?,Faroeste americano,Londres vitoriana,Europa medieval,Japão feudal,D
+13,Muito Fácil,Lies of P,Lies of P é inspirado em qual história clássica?,Cinderela,Pinóquio,Peter Pan,Alice no País das Maravilhas,B
+14,Muito Fácil,Sekiro,Qual é a arma principal do Lobo em Sekiro?,Martelo,Machado,Katana,Arco,C
+15,Muito Fácil,Bloodborne,Como o jogador é chamado em Bloodborne?,Maculado,Caçador,Morto-vivo,Cavaleiro,B
+16,Muito Fácil,Elden Ring,Como o jogador é chamado em Elden Ring?,Morto-vivo,Maculado,Caçador,Lobo,B
+17,Muito Fácil,Nioh,Qual Souls-like da Team Ninja se passa no Japão do período Sengoku?,Salt and Sanctuary,Blasphemous,Hollow Knight,Nioh,D
+18,Muito Fácil,Elden Ring,Qual o nome da montaria do jogador em Elden Ring?,Epona,Roach,Torrent,Agro,C
+19,Muito Fácil,Hollow Knight,Quem é o protagonista de Hollow Knight?,Um humano,Um dragão,Um pequeno cavaleiro inseto,Um robô,C
+20,Muito Fácil,Dark Souls,Quantos jogos principais tem a série Dark Souls?,Três,Sete,Cinco,Dois,A
+21,Fácil,Dark Souls,Qual é o primeiro chefe encontrado em Dark Souls?,Gaping Dragon,Demônio do Asilo,Ornstein,Quelaag,B
+22,Fácil,Dark Souls,Qual é o hub principal de Dark Souls 1?,Sonho do Caçador,Nexus,Majula,Santuário de Firelink,D
+23,Fácil,Bloodborne,Qual é o hub principal de Bloodborne?,Sonho do Caçador,Mesa Redonda,Santuário de Firelink,Majula,A
+24,Fácil,Elden Ring,Qual é o hub principal de Elden Ring?,Nexus,Sonho do Caçador,Mesa Redonda,Santuário de Firelink,C
+25,Fácil,Demon's Souls,Qual é o hub principal de Demon's Souls?,Nexus,Sonho do Caçador,Majula,Santuário de Firelink,A
+26,Fácil,Demon's Souls,Qual jogo da FromSoftware deu origem à fórmula Souls?,Dark Souls 3,Demon's Souls,Elden Ring,Bloodborne,B
+27,Fácil,Elden Ring,Qual personagem permite subir de nível no Sítio da Graça em Elden Ring?,Marika,Fia,Ranni,Melina,D
+28,Fácil,Dark Souls 2,Qual é o hub principal de Dark Souls 2?,Santuário de Firelink,Anor Londo,Nexus,Majula,D
+29,Fácil,Dark Souls,Quem é o chefe final de Dark Souls 1?,Artorias,Gwyn (Senhor das Cinzas),Manus,Seath,B
+30,Fácil,Sekiro,Como se chama a ferramenta mecânica acoplada ao braço do Lobo?,Braço Protético Shinobi,Escudo de Ferro,Garra Dupla,Luva do Dragão,A
+31,Fácil,Sekiro,Qual atributo de Sekiro permite um golpe mortal quando enche no inimigo?,Mana,Estamina,Postura,Fúria,C
+32,Fácil,Dark Souls 3,Qual DLC pertence a Dark Souls 3?,Artorias of the Abyss,The Old Hunters,Shadow of the Erdtree,The Ringed City,D
+33,Fácil,Elden Ring,Qual é o nome do DLC de Elden Ring?,Shadow of the Erdtree,Artorias of the Abyss,The Old Hunters,The Ringed City,A
+34,Fácil,Bloodborne,Qual é o nome do DLC de Bloodborne?,The Old Hunters,The Ringed City,Crown of the Sunken King,Shadow of the Erdtree,A
+35,Fácil,Dark Souls,Qual é o nome do DLC de Dark Souls 1?,The Ringed City,Artorias of the Abyss,The Old Hunters,Shadow of the Erdtree,B
+36,Fácil,Lies of P,Qual estúdio desenvolveu Lies of P?,Deck13,Team Ninja,FromSoftware,Round8 Studio,D
+37,Fácil,The Surge,Qual estúdio desenvolveu The Surge?,Rebellion,Deck13,CI Games,Team Ninja,B
+38,Fácil,Remnant,Qual Souls-like usa armas de fogo e mundos gerados proceduralmente?,Remnant: From the Ashes,Salt and Sanctuary,Nioh,Dark Souls,A
+39,Fácil,Nioh,Quem é o protagonista de Nioh 1?,William Adams,Arthur Morgan,Hideo Kojima,Geralt,A
+40,Fácil,Dark Souls,Qual mecânica de Dark Souls permite que outro jogador entre no seu mundo para lutar?,Respawn,Matchmaking,Parry,Invasão,D
+41,Médio,Dark Souls 2,Quem dirigiu Dark Souls 2 ao lado de Yui Tanimura?,Tomohiro Shibuya,Hidetaka Miyazaki,Yoshinori Ono,Masaru Yamamura,A
+42,Médio,Dark Souls,Em que ano foi lançado Dark Souls 1?,2011,2015,2009,2013,A
+43,Médio,Elden Ring,Em que ano foi lançado Elden Ring?,2020,2021,2023,2022,D
+44,Médio,Bloodborne,Em que ano foi lançado Bloodborne?,2015,2014,2016,2013,A
+45,Médio,Sekiro,Em que ano foi lançado Sekiro?,2017,2020,2019,2018,C
+46,Médio,Sekiro,Quem é o Santo da Espada em Sekiro?,Genichiro,Emma,Isshin Ashina,Owl,C
+47,Médio,Bloodborne,Qual é o primeiro chefe obrigatório de Bloodborne?,Fera Clériga,Vigária Amelia,Padre Gascoigne,Ludwig,A
+48,Médio,Dark Souls 3,Qual é o chefe final de Dark Souls 3?,Alma das Cinzas,Rei Sem Nome,Manus,Gwyn,A
+49,Médio,Elden Ring,Quem é o semideus que domina o Castelo Stormveil?,Morgott,Rennala,Radahn,Godrick o Enxertado,D
+50,Médio,Elden Ring,Qual chefe de Elden Ring é conhecido como Flagelo das Estrelas?,Malenia,Mohg,Rykard,Radahn,D
+51,Médio,Dark Souls,Quantos Sinos do Despertar existem em Dark Souls 1?,Quatro,Três,Um,Dois,D
+52,Médio,Demon's Souls,Qual é o reino onde se passa Demon's Souls?,Lordran,Drangleic,Boletaria,Lothric,C
+53,Médio,Dark Souls 2,Qual é o reino onde se passa Dark Souls 2?,Boletaria,Drangleic,Lordran,Lothric,B
+54,Médio,Dark Souls 3,Qual é o reino onde se passa Dark Souls 3?,Lordran,Drangleic,Boletaria,Lothric,D
+55,Médio,Hollow Knight,Como se chama o reino subterrâneo de Hollow Knight?,Boletaria,Eldoria,Hallownest,Lordran,C
+56,Difícil,Dark Souls,Qual dragão traidor busca a imortalidade em Dark Souls 1?,Kalameet,Gaping Dragon,Hellkite,Seath o Sem Escamas,D
+57,Difícil,Bloodborne,Quem é o primeiro caçador que guia o jogador no Sonho do Caçador?,Gehrman,Gascoigne,Alfred,Djura,A
+58,Difícil,Elden Ring,Qual é o chefe final da história principal de Elden Ring?,Malenia,Fera Elden,Maliketh,Radagon,B
+59,Difícil,Elden Ring,Como se chama a katana de Malenia?,Uchigatana,Mão de Malenia,Moonveil,Rivers of Blood,B
+60,Difícil,Elden Ring,Qual chefe de Elden Ring tem o título Senhor do Sangue?,Mohg,Rykard,Morgott,Maliketh,A
+61,Difícil,Dark Souls 3,Quem é o filho primogênito de Gwyn banido da história?,Ornstein,Sif,Rei Sem Nome,Artorias,C
+62,Difícil,Dark Souls,Qual personagem entrega o Lordvessel ao jogador em Dark Souls 1?,Frampt,Kaathe,Gwynevere,Alvina,A
+63,Difícil,Bloodborne,Como se chama o mecanismo de recuperar vida ao contra-atacar em Bloodborne?,Parry,Estus,Regain,Riposte,C
+64,Difícil,Sekiro,Quem é o jovem Herdeiro Divino protegido pelo Lobo?,Genichiro,Emma,Owl,Kuro,D
+65,Difícil,Demon's Souls,Quem é o chefe final de Demon's Souls?,Penetrator,Velho Rei Allant,Vanguarda,Flamelurker,B
+66,Difícil,Dark Souls 2,Qual DLC de Dark Souls 2 apresenta o chefe Rei Afundado?,Crown of the Sunken King,Artorias of the Abyss,Crown of the Ivory King,Crown of the Old Iron King,A
+67,Difícil,Salt and Sanctuary,Qual estúdio criou Salt and Sanctuary?,Team Cherry,Ska Studios,The Game Kitchen,Moon Studios,B
+68,Difícil,Hollow Knight,Qual estúdio criou Hollow Knight?,Moon Studios,Cold Symmetry,Team Cherry,Ska Studios,C
+69,Difícil,Mortal Shell,Qual estúdio criou Mortal Shell?,Deck13,Ska Studios,Round8 Studio,Cold Symmetry,D
+70,Difícil,Demon's Souls,Em qual plataforma foi lançado o Demon's Souls original?,PlayStation 3,Xbox 360,PC,Wii U,A
+71,Muito Difícil,Elden Ring,Qual é o irmão gêmeo de Mohg Senhor do Sangue?,Rykard,Morgott,Radahn,Godwyn,B
+72,Muito Difícil,Bloodborne,Qual chefe do DLC The Old Hunters é a Dama da Torre do Relógio Astral?,Laurence,Ludwig,Orphan of Kos,Lady Maria,D
+73,Muito Difícil,Dark Souls,Qual dupla de chefes guarda Anor Londo em Dark Souls 1?,Artorias e Sif,Ornstein e Smough,Pinwheel e Seath,Gwyn e Gwynevere,B
+74,Muito Difícil,Dark Souls,Qual é o companheiro animal de Artorias em Dark Souls 1?,Sif o Grande Lobo Cinzento,Kalameet,Capra,Hellkite,A
+75,Muito Difícil,Sekiro,Qual é o nome da katana do Lobo em Sekiro?,Kusabimaru,Kogarasumaru,Muramasa,Masamune,A
+76,Muito Difícil,Elden Ring,Radagon e Marika são qual relação na história de Elden Ring?,Irmãos gêmeos,A mesma entidade em duas formas,Inimigos mortais,Pai e filha,B
+77,Muito Difícil,Hollow Knight,Em que ano foi lançado Hollow Knight?,2013,2017,2019,2015,B
+78,Muito Difícil,Dark Souls,Quem compôs a trilha sonora de Dark Souls 1?,Jun Senoue,Motoi Sakuraba,Nobuo Uematsu,Yuka Kitamura,B
+79,Muito Difícil,Dark Souls,Quem é o chefe final do DLC Artorias of the Abyss?,Artorias,Manus Pai do Abismo,Kalameet,Guardião do Santuário,B
+80,Muito Difícil,Dark Souls 2,Em que ano foi lançado Dark Souls 2?,2014,2013,2015,2012,A
