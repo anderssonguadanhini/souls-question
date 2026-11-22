@@ -1,7 +1,8 @@
 /**
  * @file main.c
  * @brief Programa principal: carrega as perguntas, mostra o menu,
- *        executa a partida (15 níveis) e salva tudo em arquivo binário ao sair.
+ *        abre a interface gráfica (Raylib) ou modo terminal e salva
+ *        tudo em arquivo binário ao sair.
  */
 
 #ifdef _WIN32
@@ -32,9 +33,10 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
-#include "raylib.h" /* reservado para a interface gráfica (parte criativa) */
+#include "raylib.h"
 #include "flameChaos.h"
 #include "jogo_demilhao.h"
+#include "interface.h"
 
 /**
  * @brief Retorna a cor ANSI correspondente ao nível (1 a 5).
@@ -83,7 +85,7 @@ static void exibirEstatisticasBanco(const Banco *banco)
 }
 
 /**
- * @brief Executa uma partida completa de 15 perguntas com marcos de segurança.
+ * @brief Executa uma partida completa de 15 perguntas no terminal com marcos de segurança.
  */
 static void iniciarPartida(const Banco *banco)
 {
@@ -327,14 +329,15 @@ static void submenuGerenciar(Banco *banco)
 static void mostrarMenu(void)
 {
     printf("\n");
-    printf("%s================================%s\n", COR_CIANO, COR_RESET);
-    printf("%s        FLAME CHAOS%s\n", COR_BRANCO_NEGRITO, COR_RESET);
-    printf("%s================================%s\n", COR_CIANO, COR_RESET);
-    printf("  %s1. Jogar (15 Níveis / 1 Milhão)%s\n", COR_VERDE, COR_RESET);
-    printf("  2. Gerenciar Perguntas (CRUD / CSV)\n");
-    printf("  3. Regras e Marcos de Segurança\n");
+    printf("%s=========================================%s\n", COR_CIANO, COR_RESET);
+    printf("%s              FLAME CHAOS%s\n", COR_BRANCO_NEGRITO, COR_RESET);
+    printf("%s=========================================%s\n", COR_CIANO, COR_RESET);
+    printf("  %s1. Jogar Modo Gráfico (Torre / Mouse)%s\n", COR_VERDE, COR_RESET);
+    printf("  2. Jogar Modo Terminal (15 Níveis)\n");
+    printf("  3. Gerenciar Perguntas (CRUD / CSV)\n");
+    printf("  4. Regras e Marcos de Segurança\n");
     printf("  0. Sair e Salvar\n");
-    printf("%s================================%s\n", COR_CIANO, COR_RESET);
+    printf("%s=========================================%s\n", COR_CIANO, COR_RESET);
 }
 
 /**
@@ -363,14 +366,17 @@ int main(int argc, char *argv[])
     // Se o usuário passou um caminho ao executar, usa ele como CSV
     const char *csvInformado = (argc > 1) ? argv[1] : NULL;
 
-    // 1ª execução: lê o CSV. Nas outras: lê o binário
+    // 1ª execução: lê o CSV (ou fallback em assets/). Nas outras: lê o binário
     if (iniciarBanco(&banco, csvInformado, caminhoBin, sizeof(caminhoBin)) <= 0)
     {
-        printf("Erro ao carregar as perguntas.\n");
-        printf("Confira se o CSV existe, está em UTF-8, separado por vírgula e com o formato certo.\n");
-        printf("Você também pode executar assim: %s caminho/do/arquivo.csv\n", argv[0]);
-        free(banco.dados);
-        return EXIT_FAILURE;
+        if (iniciarBanco(&banco, "assets/perguntas_souls_like.csv", caminhoBin, sizeof(caminhoBin)) <= 0)
+        {
+            printf("Erro ao carregar as perguntas.\n");
+            printf("Confira se o CSV existe em 'assets/perguntas_souls_like.csv', está em UTF-8 e separado por vírgula.\n");
+            printf("Você também pode executar assim: %s caminho/do/arquivo.csv\n", argv[0]);
+            free(banco.dados);
+            return EXIT_FAILURE;
+        }
     }
     tocarSom(2);
     printf("%s[OK] Perguntas carregadas: %d%s\n", COR_VERDE, banco.quantidade, COR_RESET);
@@ -397,13 +403,17 @@ int main(int argc, char *argv[])
         {
         case 1:
             tocarSom(1);
-            iniciarPartida(&banco);
+            executarInterfaceGrafica(&banco);
             break;
         case 2:
             tocarSom(1);
-            submenuGerenciar(&banco);
+            iniciarPartida(&banco);
             break;
         case 3:
+            tocarSom(1);
+            submenuGerenciar(&banco);
+            break;
+        case 4:
             tocarSom(1);
             printf("\n%s--- REGRAS E MARCOS DE SEGURANCA ---%s\n", COR_CIANO, COR_RESET);
             printf("  * Questoes 01 a 02: %sMuito Facil%s\n", COR_CIANO, COR_RESET);
