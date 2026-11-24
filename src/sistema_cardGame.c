@@ -3,19 +3,50 @@
  * @author Guilherme
  * @brief Sistema de cartas do jogo: cria cartas a partir do banco de perguntas,
  *        sorteia por dificuldade e confere a resposta do jogador.
- * @version 0.3
- * @date 2026-11-23
+ * @version 0.4
+ * @date 2026-11-24
  *
  * @copyright Copyright (c) 2026
  *
  */
-#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include "jogo_demilhao.h"
 #include "sistema_cardGame.h"
+
+/* ------------------------------------------------------------------ */
+/* Funcoes auxiliares internas (static: invisiveis para outros .c,     */
+/* entao nao geram conflito de nomes no projeto).                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @brief Descarta o que sobrou na entrada padrao ate o fim da linha.
+ *
+ * Usada depois de um scanf que falhou, para nao ficar preso em lixo.
+ */
+static void limparBuffer(void)
+{
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF)
+    {
+    }
+}
+
+/**
+ * @brief Compara a resposta do jogador com a resposta correta da carta.
+ *
+ * @param[in] resposta Letra escolhida pelo jogador.
+ * @param[in] card     Carta sorteada.
+ * @return 1 se a resposta estiver correta (ignora maiusculas/minusculas),
+ *         0 se estiver errada ou se @p card for NULL.
+ */
+static int respostaCorreta(char resposta, const CardGame *card)
+{
+    return card != NULL &&
+           toupper((unsigned char)resposta) == toupper((unsigned char)card->correta);
+}
 
 /**
  * @brief Sorteia um inteiro no intervalo fechado [min, max].
@@ -24,11 +55,16 @@
  *       senao a sequencia sorteada sera sempre a mesma.
  *
  * @param min Menor valor possivel (inclusive).
- * @param max Maior valor possivel (inclusive). Deve ser >= min.
+ * @param max Maior valor possivel (inclusive). Se for menor que @p min,
+ *            a funcao devolve @p min (evita divisao por zero).
  * @return Inteiro sorteado entre min e max.
  */
 int sortear(int min, int max)
 {
+    if (max < min)
+    {
+        return min;
+    }
     return rand() % (max - min + 1) + min;
 }
 
@@ -46,11 +82,13 @@ int sortear(int min, int max)
  * Niveis fora de 1 a 5 recebem multiplicador 1 e redutor 1.0 (neutros).
  *
  * @param[out] cards   Vetor de cartas ja alocado com pelo menos @p tamanho posicoes.
- * @param[in]  tamanho Quantidade de perguntas a converter.
+ * @param[in]  tamanho Quantidade de perguntas a converter. Se for maior que
+ *                     banco->quantidade, e reduzido para esse valor.
  * @param[in]  banco   Banco com as perguntas de origem.
  *
  * @warning Se @p cards ou @p banco forem NULL, a funcao apenas escreve uma
  *          mensagem em stderr e retorna sem fazer nada.
+ * @note Textos maiores que o campo da carta sao truncados (nunca estouram).
  */
 void inicializarCards(CardGame *cards, int tamanho, Banco *banco)
 {
@@ -58,6 +96,12 @@ void inicializarCards(CardGame *cards, int tamanho, Banco *banco)
     {
         fprintf(stderr, "Ponteiro nulo passado para inicializarCards\n");
         return;
+    }
+
+    /* nunca le alem do que o banco realmente tem */
+    if (tamanho > banco->quantidade)
+    {
+        tamanho = banco->quantidade;
     }
 
     for (int i = 0; i < tamanho; i++)
@@ -94,10 +138,11 @@ void inicializarCards(CardGame *cards, int tamanho, Banco *banco)
             break;
         }
 
-        strcpy(cards[i].enunciado, banco->dados[i].enunciado);
+        /* snprintf copia no maximo sizeof(campo) bytes e sempre termina com '\0' */
+        snprintf(cards[i].enunciado, sizeof(cards[i].enunciado), "%s", banco->dados[i].enunciado);
         for (int j = 0; j < 4; j++)
         {
-            strcpy(cards[i].alternativa[j], banco->dados[i].alternativa[j]);
+            snprintf(cards[i].alternativa[j], sizeof(cards[i].alternativa[j]), "%s", banco->dados[i].alternativa[j]);
         }
         cards[i].correta = banco->dados[i].correta;
     }
@@ -114,11 +159,18 @@ void inicializarCards(CardGame *cards, int tamanho, Banco *banco)
  * @param[in]  dificuldade    Dificuldade procurada.
  * @param[out] vetorResultado Vetor que recebe as cartas encontradas. Deve ter
  *                            espaco para, no maximo, @p tamanho cartas.
- * @return Quantidade de cartas copiadas para @p vetorResultado (0 se nenhuma).
+ * @return Quantidade de cartas copiadas para @p vetorResultado (0 se nenhuma
+ *         ou se algum ponteiro for NULL).
  */
 int ProcurarDificuldadeCards(CardGame *cards, int tamanho, enum Dificuldade dificuldade, CardGame *vetorResultado)
 {
     int tamanhoResultado = 0;
+
+    if (cards == NULL || vetorResultado == NULL)
+    {
+        return 0;
+    }
+
     for (int i = 0; i < tamanho; i++)
     {
         if (cards[i].dificuldade == dificuldade)
@@ -160,16 +212,18 @@ void EscolherCard(CardGame *vetorResultado, CardGame *CardEscolhido, int tamanho
  */
 void ConfereResposta(char resposta, CardGame *CardEscolhido)
 {
-    if (CardEscolhido != NULL)
+    if (CardEscolhido == NULL)
     {
-        if (toupper((unsigned char)resposta) == toupper((unsigned char)CardEscolhido->correta))
-        {
-            printf("Resposta correta!\n");
-        }
-        else
-        {
-            printf("Resposta incorreta! A resposta correta era: %c\n", CardEscolhido->correta);
-        }
+        return;
+    }
+
+    if (respostaCorreta(resposta, CardEscolhido))
+    {
+        printf("Resposta correta!\n");
+    }
+    else
+    {
+        printf("Resposta incorreta! A resposta correta era: %c\n", CardEscolhido->correta);
     }
 }
 
@@ -183,16 +237,18 @@ void ConfereResposta(char resposta, CardGame *CardEscolhido)
  */
 void ConsequenciaEscolha(char resposta, CardGame *CardEscolhido)
 {
-    if (CardEscolhido != NULL)
+    if (CardEscolhido == NULL)
     {
-        if (toupper((unsigned char)resposta) == toupper((unsigned char)CardEscolhido->correta))
-        {
-            printf("Voce ganhou um multiplicador de %d!\n", (int)CardEscolhido->numMultiplicador);
-        }
-        else
-        {
-            printf("Voce perdeu! Seu multiplicador foi reduzido para %.1f!\n", (double)CardEscolhido->numRedutor);
-        }
+        return;
+    }
+
+    if (respostaCorreta(resposta, CardEscolhido))
+    {
+        printf("Voce ganhou um multiplicador de %d!\n", (int)CardEscolhido->numMultiplicador);
+    }
+    else
+    {
+        printf("Voce perdeu! Seu multiplicador foi reduzido para %.1f!\n", (double)CardEscolhido->numRedutor);
     }
 }
 
@@ -205,10 +261,7 @@ void ConsequenciaEscolha(char resposta, CardGame *CardEscolhido)
  */
 void liberarCards(CardGame *cards)
 {
-    if (cards != NULL)
-    {
-        free(cards);
-    }
+    free(cards); /* free(NULL) e seguro pelo padrao C */
 }
 
 /**
@@ -216,7 +269,7 @@ void liberarCards(CardGame *cards)
  *
  * Fluxo: monta as cartas a partir do banco, pede a dificuldade (1 a 5),
  * sorteia uma carta desse nivel, mostra o enunciado e as alternativas,
- * le a resposta e exibe o resultado e a consequencia.
+ * le a resposta (A a D) e exibe o resultado e a consequencia.
  *
  * @param[in] banco Banco com as perguntas carregadas.
  *
@@ -233,8 +286,8 @@ void Teste(Banco *banco)
         return;
     }
 
-    int dificuldadeEscolhida;
-    char alternativa;
+    int dificuldadeEscolhida = 0;
+    char alternativa = '\0';
 
     /* ATENCAO: confira o nome do campo de quantidade na struct Banco */
     int tamanho = banco->quantidade;
@@ -257,6 +310,7 @@ void Teste(Banco *banco)
     if (scanf("%d", &dificuldadeEscolhida) != 1 || dificuldadeEscolhida < MUITO_FACIL || dificuldadeEscolhida > MUITO_DIFICIL)
     {
         printf("Dificuldade invalida.\n");
+        limparBuffer();
         liberarCards(carta);
         return;
     }
@@ -289,7 +343,17 @@ void Teste(Banco *banco)
     }
 
     printf("Resposta: ");
-    scanf(" %c", &alternativa); /* espaco antes do %c ignora o Enter pendente */
+    /* espaco antes do %c ignora o Enter pendente; valida retorno e letra A-D */
+    if (scanf(" %c", &alternativa) != 1 ||
+        toupper((unsigned char)alternativa) < 'A' ||
+        toupper((unsigned char)alternativa) > 'D')
+    {
+        printf("Resposta invalida. Use A, B, C ou D.\n");
+        limparBuffer();
+        liberarCards(vetorResultado);
+        liberarCards(carta);
+        return;
+    }
 
     ConfereResposta(alternativa, &cartaEscolhida);
     ConsequenciaEscolha(alternativa, &cartaEscolhida);
