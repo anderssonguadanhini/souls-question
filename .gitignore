@@ -1,0 +1,9 @@
+# Executáveis gerados pelo make
+flameChaos
+flameChaos.exe
+
+# Dados gravados ao sair do programa (gerados a partir do CSV)
+perguntas.bin
+
+# Documentação gerada pelo Doxygen (make docs)
+docs/

@@ -1,0 +1,19 @@
+# Configuração do Doxygen para o Flame Chaos.
+# Gere a documentação com: make docs  (ou: doxygen Doxyfile)
+
+PROJECT_NAME           = "Flame Chaos"
+PROJECT_BRIEF          = "Jogo do Milhão souls-like em C + raylib"
+OUTPUT_DIRECTORY       = docs
+OUTPUT_LANGUAGE        = Brazilian
+INPUT                  = README.md include src
+FILE_PATTERNS          = *.c *.h *.md
+RECURSIVE              = NO
+INPUT_ENCODING         = UTF-8
+USE_MDFILE_AS_MAINPAGE = README.md
+OPTIMIZE_OUTPUT_FOR_C  = YES
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+SOURCE_BROWSER         = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+QUIET                  = YES

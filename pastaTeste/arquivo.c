@@ -1,19 +1,28 @@
-
+/**
+ * @file arquivo.c
+ * @brief Protótipo antigo de leitura de CSV e binário (não faz parte do
+ *        programa final; a versão atual está em src/jogo_demilhao.c).
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "arquivo.h"
 
-#define ARQUIVO_CSV "perguntas.csv"
-#define ARQUIVO_BIN "perguntas.bin"
+#define ARQUIVO_CSV "perguntas.csv" ///< CSV lido pelo protótipo.
+#define ARQUIVO_BIN "perguntas.bin" ///< Binário do protótipo.
 
-#define CAPACIDADE_INICIAL 5
+#define CAPACIDADE_INICIAL 5 ///< Capacidade inicial do vetor dinâmico.
 
 
-/*
- * Carrega perguntas do CSV para um vetor dinamico.
- //ordem do csv (dificuldade,enunciado,A,B,C,D,resposta)
+/**
+ * @brief Carrega as perguntas do CSV (perguntas.csv) para um vetor dinâmico.
+ *
+ * Ordem das colunas: dificuldade,enunciado,A,B,C,D,resposta.
+ *
+ * @param perguntas  Recebe o vetor alocado.
+ * @param quantidade Recebe a quantidade de perguntas lidas.
+ * @return 1 se deu certo, 0 se der erro.
  */
 int carregarCSV(Pergunta **perguntas, int *quantidade) {
 
@@ -111,8 +120,11 @@ int carregarCSV(Pergunta **perguntas, int *quantidade) {
 }
 
 
-/*
- * Carrega perguntas do arquivo binario.
+/**
+ * @brief Carrega as perguntas do arquivo binário (perguntas.bin).
+ * @param perguntas  Recebe o vetor alocado.
+ * @param quantidade Recebe a quantidade de perguntas lidas.
+ * @return 1 se deu certo, 0 se der erro.
  */
 int carregarBinario(Pergunta **perguntas, int *quantidade) {
 
@@ -159,8 +171,11 @@ int carregarBinario(Pergunta **perguntas, int *quantidade) {
 }
 
 
-/*
- * Salva perguntas no arquivo binario.
+/**
+ * @brief Salva as perguntas no arquivo binário (perguntas.bin).
+ * @param perguntas  Vetor de perguntas.
+ * @param quantidade Quantidade de perguntas.
+ * @return 1 se deu certo, 0 se der erro.
  */
 int salvarBinario(Pergunta *perguntas, int quantidade) {
 
@@ -190,9 +205,11 @@ int salvarBinario(Pergunta *perguntas, int quantidade) {
 }
 
 
-/*
- * Verifica se existe arquivo binario.
- * Caso contrario, carrega o CSV.
+/**
+ * @brief Carrega do binário se ele existir; senão, carrega do CSV.
+ * @param perguntas  Recebe o vetor alocado.
+ * @param quantidade Recebe a quantidade de perguntas lidas.
+ * @return 1 se deu certo, 0 se der erro.
  */
 int carregarDados(Pergunta **perguntas, int *quantidade) {
 

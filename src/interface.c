@@ -1,3 +1,12 @@
+/**
+ * @file interface.c
+ * @brief Interface gráfica (raylib): arena com herói, inimigos e itens, e o
+ *        sistema de cartas de perguntas que altera o poder do herói.
+ *
+ * O jogador clica para mover o herói, coletar itens e enfrentar inimigos.
+ * Vencer um combate (poder do herói >= poder do inimigo) abre a escolha de
+ * cartas; acertar multiplica o poder e errar reduz.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,111 +18,131 @@
 #include "jogo_demilhao.h"
 #include "sistema_cardGame.h"
 
-#define MAX_INIMIGOS 16
-#define MAX_ITENS 12
-#define MAX_POPUPS 12
-#define PODER_MAX_INIMIGO 9999999
-#define PODER_INICIAL_HEROI 5
+#define MAX_INIMIGOS 16           ///< Capacidade do vetor de inimigos da arena.
+#define MAX_ITENS 12              ///< Capacidade do vetor de itens da arena.
+#define MAX_POPUPS 12             ///< Quantos textos flutuantes podem aparecer ao mesmo tempo.
+#define PODER_MAX_INIMIGO 9999999 ///< Maior poder de um inimigo; o herói pode passar disso (ver clampIntMax).
+#define PODER_INICIAL_HEROI 5     ///< Poder com que o herói começa toda arena.
 
+/** @brief Tipos de item que podem ser coletados na arena. */
 typedef enum
 {
-    TIPO_ITEM_BAU = 0,
-    TIPO_ITEM_ARMA_MULT
+    TIPO_ITEM_BAU = 0,  ///< Baú: SOMA um bônus ao poder.
+    TIPO_ITEM_ARMA_MULT ///< Espada: MULTIPLICA o poder.
 } TipoItem;
 
+/** @brief Estado do herói controlado pelo jogador (posição, poder, animações e sprites). */
 typedef struct
 {
-    Vector2 pos;
-    Vector2 destino;
-    int movendo;
-    int direcaoX; // 1 = direita, -1 = esquerda
-    float velocidade;
-    int inimigoAlvoIdx; // >= 0 se estiver indo atacar um inimigo
-    int itemAlvoIdx;    // >= 0 se estiver indo pegar um item
-    float timerAtaque;  // Animação de golpe ao chegar no inimigo
-    float timerRecuo;   // Animação de dano caso perca o combate
-    float timerLevelUp; // Efeito visual de evolução ao pegar item / upar
-    int poder;
-    int nivelArma;       // Quantidade de itens coletados
-    int estagioEvolucao; // 0: hero, 1: hero_espada1, 2: hero_espada2, 3: hero_final
-    int derrotouSif;     // 1 ao derrotar Sif (libera forma final)
-    int vivo;
-    Texture2D texHeroi;
-    int temTexHeroi;
-    Texture2D texHeroiEspada1;
-    int temTexHeroiEspada1;
-    Texture2D texHeroiEspada2;
-    int temTexHeroiEspada2;
-    Texture2D texHeroiFinal;
-    int temTexHeroiFinal;
+    Vector2 pos;               ///< Posição atual (base/pés do personagem).
+    Vector2 destino;           ///< Para onde o herói está andando.
+    int movendo;               ///< 1 enquanto anda até o destino.
+    int direcaoX;              ///< 1 = direita, -1 = esquerda.
+    float velocidade;          ///< Velocidade de caminhada em pixels por segundo.
+    int inimigoAlvoIdx;        ///< Índice do inimigo que vai atacar (-1 = nenhum).
+    int itemAlvoIdx;           ///< Índice do item que vai pegar (-1 = nenhum).
+    float timerAtaque;         ///< Tempo restante da animação de golpe.
+    float timerRecuo;          ///< Tempo restante da animação de dano (perdeu o combate).
+    float timerLevelUp;        ///< Tempo restante do efeito visual de evolução.
+    int poder;                 ///< Poder atual (comparado com o do inimigo no combate).
+    int nivelArma;             ///< Quantidade de itens coletados.
+    int estagioEvolucao;       ///< 0: hero, 1: hero_espada1, 2: hero_espada2, 3: hero_final.
+    int derrotouSif;           ///< 1 após derrotar o Sif (libera a forma final).
+    int vivo;                  ///< 1 enquanto o herói pode agir.
+    Texture2D texHeroi;        ///< Sprite do estágio 0.
+    int temTexHeroi;           ///< 1 se texHeroi foi carregado.
+    Texture2D texHeroiEspada1; ///< Sprite do estágio 1.
+    int temTexHeroiEspada1;    ///< 1 se texHeroiEspada1 foi carregado.
+    Texture2D texHeroiEspada2; ///< Sprite do estágio 2.
+    int temTexHeroiEspada2;    ///< 1 se texHeroiEspada2 foi carregado.
+    Texture2D texHeroiFinal;   ///< Sprite do estágio 3 (Forma Suprema).
+    int temTexHeroiFinal;      ///< 1 se texHeroiFinal foi carregado.
 } Heroi;
 
+/** @brief Um inimigo da arena (Hollows e chefes). */
 typedef struct
 {
-    int id;
-    char nome[48];
-    Vector2 pos;
-    int poder;
-    int nivelDificuldade;
-    int derrotado;
-    int ehChefe;
-    Texture2D texInimigo;
-    int temTexInimigo;
+    int id;                ///< Identificador (também desincroniza as animações).
+    char nome[48];         ///< Nome mostrado na tela.
+    Vector2 pos;           ///< Posição (base/pés).
+    int poder;             ///< Poder necessário para vencê-lo.
+    int nivelDificuldade;  ///< Dificuldade de 1 a 5 (usada no visual).
+    int derrotado;         ///< 1 depois de vencido (some da arena).
+    int ehChefe;           ///< 1 para chefes (Sif e Gwyn): maiores e com hitbox maior.
+    Texture2D texInimigo;  ///< Sprite do inimigo.
+    int temTexInimigo;     ///< 1 se texInimigo foi carregado.
 } Inimigo;
 
+/** @brief Um item coletável (baú ou espada). */
 typedef struct
 {
-    int id;
-    char nome[48];
-    TipoItem tipo;
-    Vector2 pos;
-    int bonusPoder;    // Ex: +4, +10...
-    int multiplicador; // Ex: x4, x100...
-    int coletado;
-    Texture2D texItem;
-    int temTexItem;
+    int id;            ///< Identificador do item.
+    char nome[48];     ///< Nome mostrado na tela.
+    TipoItem tipo;     ///< Baú (soma) ou espada (multiplica).
+    Vector2 pos;       ///< Posição na arena.
+    int bonusPoder;    ///< Quanto o baú soma ao poder (ex.: +4, +10).
+    int multiplicador; ///< Quanto a espada multiplica o poder (ex.: x4, x100).
+    int coletado;      ///< 1 depois de coletado (some da arena).
+    Texture2D texItem; ///< Sprite do item (opcional).
+    int temTexItem;    ///< 1 se texItem foi carregado.
 } Item;
 
+/** @brief Imagem de fundo da arena. */
 typedef struct
 {
-    Texture2D texCenario;
-    int temCenario;
+    Texture2D texCenario; ///< Textura do cenário.
+    int temCenario;       ///< 1 se texCenario foi carregado.
 } Cenario;
 
+/** @brief Tudo o que existe em uma partida gráfica: herói, inimigos, itens e cenário. */
 typedef struct
 {
-    int limiarEspada1;
-    int limiarEspada2;
-    int limiarFormaFinal;
-    Cenario cenario;
-    Heroi heroi;
-    Inimigo inimigos[MAX_INIMIGOS];
-    int qtdInimigos;
-    Item itens[MAX_ITENS];
-    int qtdItens;
-    int vitoriaArena;
+    int limiarEspada1;              ///< Poder que libera o estágio visual 1.
+    int limiarEspada2;              ///< Poder que libera o estágio visual 2.
+    int limiarFormaFinal;           ///< Poder que libera a Forma Suprema.
+    Cenario cenario;                ///< Fundo da arena.
+    Heroi heroi;                    ///< O jogador.
+    Inimigo inimigos[MAX_INIMIGOS]; ///< Inimigos da arena.
+    int qtdInimigos;                ///< Quantos inimigos estão em uso.
+    Item itens[MAX_ITENS];          ///< Itens da arena.
+    int qtdItens;                   ///< Quantos itens estão em uso.
+    int vitoriaArena;               ///< 1 quando todos os inimigos foram derrotados.
 } Arena;
 
+/** @brief Deformações aplicadas ao sprite para simular respiração e passos. */
 typedef struct
 {
-    float escalaX;
-    float escalaY;
-    float passoY;
-    float inclinacao;
-    float sombraEscala;
+    float escalaX;      ///< Escala horizontal do sprite.
+    float escalaY;      ///< Escala vertical do sprite.
+    float passoY;       ///< Deslocamento vertical (pulinho do passo).
+    float inclinacao;   ///< Rotação em graus.
+    float sombraEscala; ///< Escala da sombra no chão.
 } MovimentoCorpo;
 
+/** @brief Texto que sobe e some na tela (ex.: "+10 PODER!"). */
 typedef struct
 {
-    int ativo;
-    char texto[48];
-    Vector2 pos;
-    Color cor;
-    float tempoRestante;
+    int ativo;           ///< 1 enquanto está sendo mostrado.
+    char texto[48];      ///< Mensagem.
+    Vector2 pos;         ///< Posição atual (sobe com o tempo).
+    Color cor;           ///< Cor do texto.
+    float tempoRestante; ///< Segundos até sumir.
 } TextoFlutuante;
 
+/** @brief Textos flutuantes ativos (static: visível só neste arquivo). */
 static TextoFlutuante popups[MAX_POPUPS] = {0};
 
+/**
+ * @brief Limita um valor ao intervalo [minimo, maximo].
+ *
+ * Recebe long long para que as contas de poder (multiplicações) não
+ * estourem o int antes de serem limitadas.
+ *
+ * @param valor  Valor a limitar.
+ * @param minimo Menor valor permitido.
+ * @param maximo Maior valor permitido.
+ * @return O valor dentro do intervalo, já convertido para int.
+ */
 static int clampIntMax(long long valor, int minimo, int maximo)
 {
     if (valor < minimo)
@@ -123,10 +152,21 @@ static int clampIntMax(long long valor, int minimo, int maximo)
     return (int)valor;
 }
 
+/**
+ * @brief Sorteia um inteiro em [minimo, maximo], mesmo para faixas grandes.
+ *
+ * O rand() do Windows tem só 15 bits (até 32767), então dois sorteios são
+ * combinados para cobrir faixas de até ~10 milhões.
+ *
+ * @param minimo Menor valor possível.
+ * @param maximo Maior valor possível.
+ * @return Valor sorteado (ou @p minimo se maximo <= minimo).
+ */
 static int sortearPoderAteMaximo(int minimo, int maximo)
 {
     if (maximo <= minimo)
         return minimo;
+    // rand() pode ter só 15 bits (Windows); junta dois sorteios para cobrir faixas até ~10 milhões
     unsigned int r1 = (unsigned int)(rand() & 0xFFFF);
     unsigned int r2 = (unsigned int)(rand() & 0xFFFF);
     unsigned int combinado = (r1 << 16) | r2;
@@ -134,10 +174,26 @@ static int sortearPoderAteMaximo(int minimo, int maximo)
     return minimo + (int)(combinado % intervalo);
 }
 
+/**
+ * @brief Sorteia uma posição na tela longe das posições já ocupadas.
+ *
+ * Tenta até 80 posições; se nenhuma ficar longe o bastante, fica com a
+ * última sorteada (melhor sobrepor do que travar). A posição escolhida é
+ * acrescentada a @p ocupados (até 32 posições).
+ *
+ * @param ocupados    Vetor de posições já usadas (capacidade 32).
+ * @param qtdOcupados Quantidade de posições em @p ocupados (é atualizada).
+ * @param largTela    Largura da tela em pixels.
+ * @param altTela     Altura da tela em pixels.
+ * @param distMinima  Distância mínima até as posições ocupadas.
+ * @return A posição sorteada.
+ */
 static Vector2 sortearPosicaoLivre(Vector2 ocupados[], int *qtdOcupados, float largTela, float altTela, float distMinima)
 {
     Vector2 candidata = {largTela * 0.5f, altTela * 0.55f};
 
+    // Tenta até 80 posições; se nenhuma ficar longe o bastante dos ocupados,
+    // fica com a última sorteada (melhor sobrepor do que travar).
     for (int tentativa = 0; tentativa < 80; tentativa++)
     {
         float rx = (float)GetRandomValue(16, 84) / 100.0f;
@@ -160,6 +216,7 @@ static Vector2 sortearPosicaoLivre(Vector2 ocupados[], int *qtdOcupados, float l
             break;
     }
 
+    // limite do vetor "ocupados" declarado com 32 posições
     if (*qtdOcupados < 32)
     {
         ocupados[*qtdOcupados] = candidata;
@@ -168,6 +225,16 @@ static Vector2 sortearPosicaoLivre(Vector2 ocupados[], int *qtdOcupados, float l
     return candidata;
 }
 
+/**
+ * @brief Mostra um texto flutuante que sobe e desaparece.
+ *
+ * Usa a primeira vaga livre de ::popups; se todas estiverem em uso, o
+ * aviso é descartado.
+ *
+ * @param texto Mensagem (até 47 caracteres).
+ * @param pos   Posição inicial na tela.
+ * @param cor   Cor do texto.
+ */
 static void adicionarPopup(const char *texto, Vector2 pos, Color cor)
 {
     for (int i = 0; i < MAX_POPUPS; i++)
@@ -184,6 +251,10 @@ static void adicionarPopup(const char *texto, Vector2 pos, Color cor)
     }
 }
 
+/**
+ * @brief Move, esmaece e desenha os textos flutuantes ativos.
+ * @param dt Tempo do quadro em segundos.
+ */
 static void atualizarEDesenharPopups(float dt)
 {
     for (int i = 0; i < MAX_POPUPS; i++)
@@ -217,7 +288,16 @@ static void atualizarEDesenharPopups(float dt)
     }
 }
 
-// Carrega o sprite removendo o fundo preto puro (ou branco se o canto for claro)
+/**
+ * @brief Carrega uma imagem como textura, deixando o fundo transparente.
+ *
+ * Se o canto superior esquerdo for branco, remove o fundo branco; senão,
+ * remove o fundo preto puro.
+ *
+ * @param caminho   Caminho da imagem.
+ * @param carregado Recebe 1 se a textura foi criada, 0 se não.
+ * @return A textura (id 0 se o arquivo não existe ou falhou).
+ */
 static Texture2D carregarSpriteRecortado(const char *caminho, int *carregado)
 {
     *carregado = 0;
@@ -253,6 +333,8 @@ static Texture2D carregarSpriteRecortado(const char *caminho, int *carregado)
         }
     }
 
+    // UnloadImage libera só os dados originais; "pixels" é uma cópia separada
+    // (já com o fundo transparente) e passa a ser a imagem usada na textura.
     UnloadImage(img);
     img.data = pixels;
     img.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
@@ -268,7 +350,14 @@ static Texture2D carregarSpriteRecortado(const char *caminho, int *carregado)
     return tex;
 }
 
-// Define o movimento corporal do personagem
+/**
+ * @brief Calcula a "respiração" (parado) ou os passos (andando) de um personagem.
+ * @param ehHeroi   1 para o herói (ritmo diferente dos inimigos).
+ * @param movendo   1 se está andando.
+ * @param direcaoX  1 = direita, -1 = esquerda (define a inclinação).
+ * @param faseTempo Atraso para os personagens não se moverem em sincronia.
+ * @return As deformações a aplicar ao sprite.
+ */
 static MovimentoCorpo calcularMovimentoPersonagem(int ehHeroi, int movendo, int direcaoX, float faseTempo)
 {
     MovimentoCorpo mov = {1.0f, 1.0f, 0.0f, 0.0f, 1.0f};
@@ -298,8 +387,15 @@ static MovimentoCorpo calcularMovimentoPersonagem(int ehHeroi, int movendo, int 
     return mov;
 }
 
-// Avalia e atualiza o estágio visual do herói (0 -> 1 -> 2 -> 3)
-// Forma Suprema (3) ativa ao derrotar o Sif (unindo-se a ele) ou atingir o poder necessário antes de enfrentar o Gwyn
+/**
+ * @brief Atualiza o estágio visual do herói (0 -> 1 -> 2 -> 3).
+ *
+ * A Forma Suprema (3) é ativada ao derrotar o Sif ou ao atingir o poder
+ * necessário antes de enfrentar o Gwyn. O estágio só sobe, nunca volta.
+ *
+ * @param arena         Arena com o herói e os limiares de evolução.
+ * @param forcarEspada2 1 para garantir pelo menos o estágio 2 (pegou a espada).
+ */
 static void atualizarEvolucaoHeroi(Arena *arena, int forcarEspada2)
 {
     Heroi *heroi = &arena->heroi;
@@ -320,6 +416,7 @@ static void atualizarEvolucaoHeroi(Arena *arena, int forcarEspada2)
             novoEstagio = 1; // hero_espada1.png
     }
 
+    // O estágio só sobe, nunca volta (mesmo que o poder caia por erro numa carta)
     if (novoEstagio > heroi->estagioEvolucao)
     {
         heroi->estagioEvolucao = novoEstagio;
@@ -346,7 +443,15 @@ static void atualizarEvolucaoHeroi(Arena *arena, int forcarEspada2)
     }
 }
 
-// Aplica o efeito do item coletado e evolui o herói
+/**
+ * @brief Aplica o efeito de um item coletado e evolui o herói.
+ *
+ * Baú soma @c bonusPoder ao poder; espada multiplica o poder por
+ * @c multiplicador.
+ *
+ * @param arena   Arena com o herói e os itens.
+ * @param idxItem Índice do item em @c arena->itens.
+ */
 static void coletarItem(Arena *arena, int idxItem)
 {
     Item *it = &arena->itens[idxItem];
@@ -355,10 +460,11 @@ static void coletarItem(Arena *arena, int idxItem)
 
     it->coletado = 1;
     arena->heroi.timerLevelUp = 0.85f;
-    arena->heroi.nivelArma++;
+    arena->heroi.nivelArma++; // conta itens coletados; também define o estágio visual
 
     if (it->tipo == TIPO_ITEM_ARMA_MULT)
     {
+        // espada: MULTIPLICA o poder (baús, abaixo, apenas somam)
         long long novoPoder = (long long)arena->heroi.poder * (long long)it->multiplicador;
         arena->heroi.poder = clampIntMax(novoPoder, 1, PODER_MAX_INIMIGO * 2);
         adicionarPopup(TextFormat("PODER x%d!", it->multiplicador),
@@ -384,78 +490,90 @@ static void coletarItem(Arena *arena, int idxItem)
 // (erro) sobre o poder. Reaproveita o sistema_cardGame.c:
 // inicializarCards, ProcurarDificuldadeCards e EscolherCard.
 // ============================================================================
-#define CARTAS_QTD 5
-#define CARTA_TEX_L 360
-#define CARTA_TEX_A 504
+#define CARTAS_QTD 5    ///< Uma carta por nível de dificuldade.
+#define CARTA_TEX_L 360 ///< Largura (px) da textura de uma carta.
+#define CARTA_TEX_A 504 ///< Altura (px) da textura de uma carta.
 
+/** @brief Fases da tela de cartas, na ordem em que acontecem. */
 typedef enum
 {
-    CARTAS_FASE_INATIVA = 0,
-    CARTAS_FASE_ESPERA,     // pequena pausa para ver o "+poder" do combate
-    CARTAS_FASE_ESCOLHA,    // 5 cartas de costas na mesa
-    CARTAS_FASE_REVELANDO,  // carta escolhida vai ao centro e desvira
-    CARTAS_FASE_PERGUNTA,   // enunciado + alternativas A-D
-    CARTAS_FASE_RESULTADO   // acerto/erro e consequencia no poder
+    CARTAS_FASE_INATIVA = 0, ///< Nenhuma carta na tela (o jogador anda pela arena).
+    CARTAS_FASE_ESPERA,      ///< Pequena pausa para ver o "+poder" do combate.
+    CARTAS_FASE_ESCOLHA,     ///< 5 cartas de costas na mesa.
+    CARTAS_FASE_REVELANDO,   ///< Carta escolhida vai ao centro e desvira.
+    CARTAS_FASE_PERGUNTA,    ///< Enunciado + alternativas A-D.
+    CARTAS_FASE_RESULTADO    ///< Acerto/erro e consequência no poder.
 } FaseCartas;
 
+/** @brief Estado da tela de cartas durante uma escolha/pergunta. */
 typedef struct
 {
-    FaseCartas fase;
-    float tempoFase;
-    int escolhida;
-    int hover;
-    int disponivel[CARTAS_QTD];
-    float elevacao[CARTAS_QTD];
-    CardGame carta;
-    char letraEscolhida;
-    int acertou;
-    int poderAntes;
-    int poderDepois;
+    FaseCartas fase;            ///< Fase atual.
+    float tempoFase;            ///< Segundos desde que a fase começou.
+    int escolhida;              ///< Índice (0-4) da carta escolhida, ou -1.
+    int hover;                  ///< Carta ou botão sob o mouse, ou -1.
+    int disponivel[CARTAS_QTD]; ///< 1 se o nível tem pelo menos uma pergunta.
+    float elevacao[CARTAS_QTD]; ///< Animação de "levantar" a carta no hover (0 a 1).
+    CardGame carta;             ///< Pergunta sorteada.
+    char letraEscolhida;        ///< Resposta do jogador ('A' a 'D').
+    int acertou;                ///< 1 se acertou a pergunta.
+    int poderAntes;             ///< Poder do herói antes da resposta.
+    int poderDepois;            ///< Poder do herói depois da resposta.
 } EstadoCartas;
 
+/** @brief Paleta e efeitos visuais de uma carta (cada carta homenageia um chefe). */
 typedef struct
 {
-    Color fundoTopo;
-    Color fundoBase;
-    Color moldura;
-    Color molduraInterna;
-    Color texto;
-    Color contorno;
-    Color brilho;
-    float espacamento; // espaco entre letras
-    float ondulacao;   // letras sobem e descem levemente
-    int fonte;         // tamanho da palavra principal
-    int pingos;        // 1 = letras "escorrendo" (podridao escarlate)
-    int contornoDuplo; // 1 = segundo contorno dourado
+    Color fundoTopo;      ///< Cor do topo do degradê de fundo.
+    Color fundoBase;      ///< Cor da base do degradê de fundo.
+    Color moldura;        ///< Cor da moldura externa.
+    Color molduraInterna; ///< Cor da moldura interna.
+    Color texto;          ///< Cor das letras.
+    Color contorno;       ///< Cor do contorno das letras.
+    Color brilho;         ///< Cor do brilho em volta das letras.
+    float espacamento;    ///< Espaço entre letras.
+    float ondulacao;      ///< Quanto as letras sobem e descem.
+    int fonte;            ///< Tamanho da palavra principal.
+    int pingos;           ///< 1 = letras "escorrendo" (podridão escarlate).
+    int contornoDuplo;    ///< 1 = segundo contorno dourado.
 } EstiloCarta;
 
+/** @brief Posições calculadas do painel de pergunta (depende do tamanho da tela e do texto). */
 typedef struct
 {
-    Rectangle painel;
-    Rectangle botoes[4];
-    float yCabecalho;
-    float yEnunciado;
-    float alturaEnunciado;
-    float yRodape;
+    Rectangle painel;      ///< Retângulo do painel inteiro.
+    Rectangle botoes[4];   ///< Botões das alternativas A-D.
+    float yCabecalho;      ///< Y do cabeçalho.
+    float yEnunciado;      ///< Y do enunciado.
+    float alturaEnunciado; ///< Altura ocupada pelo enunciado já quebrado em linhas.
+    float yRodape;         ///< Y do rodapé.
 } LayoutPergunta;
 
-static EstadoCartas estadoCartas;
-static CardGame *todasCartas = NULL;
-static CardGame *filtroCartas = NULL;
-static int totalCartas = 0;
-static RenderTexture2D costasCartas[CARTAS_QTD];
-static int temCostasCartas[CARTAS_QTD];
-static Texture2D artesCartas[CARTAS_QTD];
-static int temArteCarta[CARTAS_QTD];
-static Font fontesCartas[CARTAS_QTD];
-static int temFonteCarta[CARTAS_QTD];
+/* Estado do sistema de cartas. São static (visíveis só neste arquivo) porque
+ * as texturas precisam existir entre um quadro e outro do laço do raylib. */
+static EstadoCartas estadoCartas;                ///< Estado da tela de cartas.
+static CardGame *todasCartas = NULL;             ///< Todas as perguntas convertidas em cartas.
+static CardGame *filtroCartas = NULL;            ///< Vetor de trabalho para filtrar por nível.
+static int totalCartas = 0;                      ///< Tamanho de todasCartas.
+static RenderTexture2D costasCartas[CARTAS_QTD]; ///< Costas desenhadas de cada carta.
+static int temCostasCartas[CARTAS_QTD];          ///< 1 se a costa foi gerada.
+static Texture2D artesCartas[CARTAS_QTD];        ///< Arte opcional (assets/cartas/<boss>.png).
+static int temArteCarta[CARTAS_QTD];             ///< 1 se a arte foi carregada.
+static Font fontesCartas[CARTAS_QTD];            ///< Fonte opcional (assets/fonts/<boss>.ttf).
+static int temFonteCarta[CARTAS_QTD];            ///< 1 se a fonte foi carregada.
 
+/** @brief Nível de dificuldade de cada uma das 5 cartas. */
 static const enum Dificuldade ordemDificuldades[CARTAS_QTD] = {MUITO_FACIL, FACIL, MEDIO, DIFICIL, MUITO_DIFICIL};
+/** @brief Texto da dificuldade escrito nas costas de cada carta. */
 static const char *rotulosDificuldade[CARTAS_QTD] = {"MUITO FACIL", "FACIL", "MEDIO", "DIFICIL", "MUITO DIFICIL"};
+/** @brief Chefe homenageado por cada carta. */
 static const char *nomesBossCarta[CARTAS_QTD] = {"MARGIT", "RENNALA", "RADAHN", "RADAGON", "MALENIA"};
+/** @brief Nome dos arquivos opcionais de arte/fonte de cada carta. */
 static const char *arquivosBossCarta[CARTAS_QTD] = {"margit", "rennala", "radahn", "radagon", "malenia"};
+/** @brief Numeral romano de cada carta. */
 static const char *numeraisCarta[CARTAS_QTD] = {"I", "II", "III", "IV", "V"};
 
+/** @brief Estilo visual de cada carta (mesma ordem de ordemDificuldades). */
 static const EstiloCarta estilosCartas[CARTAS_QTD] = {
     // 0 - Margit: ferro velho e ouro da Ordem Dourada
     {{62, 60, 55, 255}, {20, 18, 15, 255}, {200, 164, 88, 255}, {126, 102, 54, 255}, {232, 220, 182, 255}, {18, 14, 8, 255}, {200, 164, 88, 255}, 3.0f, 0.0f, 40, 0, 0},
@@ -471,6 +589,11 @@ static const EstiloCarta estilosCartas[CARTAS_QTD] = {
 // ----------------------------------------------------------------------------
 // Utilidades
 // ----------------------------------------------------------------------------
+/**
+ * @brief Limita um valor ao intervalo [0, 1].
+ * @param v Valor.
+ * @return @p v limitado a [0, 1].
+ */
 static float cartasClamp01(float v)
 {
     if (v < 0.0f)
@@ -480,13 +603,26 @@ static float cartasClamp01(float v)
     return v;
 }
 
+/**
+ * @brief Curva de animação "ease-out" (começa rápido, termina devagar).
+ * @param t Progresso de 0 a 1.
+ * @return Progresso suavizado de 0 a 1.
+ */
 static float cartasSuavizar(float t)
 {
     t = cartasClamp01(t);
     return 1.0f - powf(1.0f - t, 3.0f);
 }
 
-// Ruido deterministico (nao mexe no rand() do jogo)
+/**
+ * @brief Gera um número pseudoaleatório fixo para cada semente.
+ *
+ * Não usa rand(), para não alterar a sequência de sorteios do jogo e para
+ * os desenhos das cartas saírem sempre iguais.
+ *
+ * @param semente Semente.
+ * @return Valor entre 0 e 1.
+ */
 static float cartasRuido(int semente)
 {
     unsigned int x = (unsigned int)semente * 747796405u + 2891336453u;
@@ -495,7 +631,16 @@ static float cartasRuido(int semente)
     return (float)(x & 0xFFFFu) / 65535.0f;
 }
 
-// Triangulo que se orienta sozinho (o raylib descarta triangulos no sentido errado)
+/**
+ * @brief Desenha um triângulo em qualquer ordem de vértices.
+ *
+ * O raylib descarta triângulos no sentido horário; esta função corrige a ordem.
+ *
+ * @param a   Vértice 1.
+ * @param b   Vértice 2.
+ * @param c   Vértice 3.
+ * @param cor Cor de preenchimento.
+ */
 static void cartasTri(Vector2 a, Vector2 b, Vector2 c, Color cor)
 {
     float cruz = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
@@ -505,13 +650,31 @@ static void cartasTri(Vector2 a, Vector2 b, Vector2 c, Color cor)
         DrawTriangle(a, b, c, cor);
 }
 
+/**
+ * @brief Desenha um quadrilátero como dois triângulos.
+ * @param a   Vértice 1.
+ * @param b   Vértice 2.
+ * @param c   Vértice 3.
+ * @param d   Vértice 4.
+ * @param cor Cor de preenchimento.
+ */
 static void cartasQuad(Vector2 a, Vector2 b, Vector2 c, Vector2 d, Color cor)
 {
     cartasTri(a, b, c, cor);
     cartasTri(a, c, d, cor);
 }
 
-// Arco com espessura variavel (usado em chifres, aneis, cabelos...)
+/**
+ * @brief Desenha um arco com espessura variável (chifres, anéis, cabelos...).
+ * @param cx     Centro X.
+ * @param cy     Centro Y.
+ * @param raio   Raio do arco.
+ * @param a0     Ângulo inicial em graus.
+ * @param a1     Ângulo final em graus.
+ * @param espIni Espessura no início.
+ * @param espFim Espessura no fim.
+ * @param cor    Cor do arco.
+ */
 static void cartasArcoAfilado(float cx, float cy, float raio, float a0, float a1, float espIni, float espFim, Color cor)
 {
     const int passos = 32;
@@ -528,6 +691,13 @@ static void cartasArcoAfilado(float cx, float cy, float raio, float a0, float a1
     }
 }
 
+/**
+ * @brief Espalha estrelas (pontos de brilho) na arte de uma carta.
+ * @param semente Semente que define a posição das estrelas.
+ * @param qtd     Quantidade de estrelas.
+ * @param cor     Cor das estrelas.
+ * @param yMax    Altura máxima onde podem aparecer.
+ */
 static void cartasEstrelas(int semente, int qtd, Color cor, float yMax)
 {
     for (int i = 0; i < qtd; i++)
@@ -539,8 +709,18 @@ static void cartasEstrelas(int semente, int qtd, Color cor, float yMax)
     }
 }
 
-// Quebra o texto em linhas dentro de larguraMax. Retorna a altura usada.
-// Com desenhar = 0 apenas mede. Com centralizar = 1, x e o centro das linhas.
+/**
+ * @brief Desenha (ou só mede) um texto quebrando as linhas por largura.
+ * @param texto       Texto a desenhar.
+ * @param x           X inicial (ou centro, se @p centralizar).
+ * @param y           Y da primeira linha.
+ * @param larguraMax  Largura máxima de cada linha.
+ * @param fonte       Tamanho da fonte.
+ * @param cor         Cor do texto.
+ * @param centralizar 1 para centralizar cada linha em @p x.
+ * @param desenhar    0 para apenas medir, sem desenhar.
+ * @return Altura total ocupada, em pixels.
+ */
 static int cartasTextoQuebrado(const char *texto, float x, float y, float larguraMax, int fonte, Color cor, int centralizar, int desenhar)
 {
     char linha[512] = {0};
@@ -598,7 +778,14 @@ static int cartasTextoQuebrado(const char *texto, float x, float y, float largur
     return (int)(yAtual - y);
 }
 
-// Se a alternativa ja vier como "A) texto", remove o prefixo (a letra e desenhada no botao)
+/**
+ * @brief Remove o prefixo "A) ", "B. " etc. de uma alternativa.
+ *
+ * A letra já é desenhada no botão, então o prefixo ficaria repetido.
+ *
+ * @param alt Texto da alternativa.
+ * @return Ponteiro para o texto sem o prefixo (dentro de @p alt).
+ */
 static const char *cartasTextoAlternativa(const char *alt)
 {
     if (alt[0] != '\0' && alt[1] != '\0' && strchr(").]:-", alt[1]) != NULL &&
@@ -612,13 +799,26 @@ static const char *cartasTextoAlternativa(const char *alt)
     return alt;
 }
 
+/**
+ * @brief Fator que multiplica o poder quando o jogador acerta a carta.
+ * @param carta Carta respondida.
+ * @return O multiplicador da carta (1 se for inválido).
+ */
 static double cartasFatorAcerto(const CardGame *carta)
 {
     double m = (double)carta->numMultiplicador;
     return (m > 0.0) ? m : 1.0;
 }
 
-// O redutor e aplicado como fator (ex.: 0.5 = metade). Se vier maior que 1, vira divisor.
+/**
+ * @brief Fator que multiplica o poder quando o jogador erra a carta.
+ *
+ * O redutor é aplicado como fator (ex.: 0.5 = metade); se vier maior que 1,
+ * vira divisor (redutor 4 -> fator 0.25).
+ *
+ * @param carta Carta respondida.
+ * @return Fator entre 0 e 1 (1 se o redutor for inválido).
+ */
 static double cartasFatorErro(const CardGame *carta)
 {
     double r = (double)carta->numRedutor;
@@ -630,12 +830,24 @@ static double cartasFatorErro(const CardGame *carta)
 // ----------------------------------------------------------------------------
 // Texto tematico das costas (cada letra recebe brilho, contorno e efeitos do boss)
 // ----------------------------------------------------------------------------
+/**
+ * @brief Desenha um texto letra a letra com o estilo do chefe da carta.
+ *
+ * Cada letra recebe brilho, contorno, ondulação e, na carta da Malenia,
+ * "pingos" escorrendo.
+ *
+ * @param idx   Índice da carta (0 a 4).
+ * @param texto Texto (até 31 letras).
+ * @param cx    Centro X do texto.
+ * @param y     Y do texto.
+ * @param fonte Tamanho da fonte.
+ */
 static void cartasTextoTematico(int idx, const char *texto, float cx, float y, float fonte)
 {
     const EstiloCarta *e = &estilosCartas[idx];
     Font f = temFonteCarta[idx] ? fontesCartas[idx] : GetFontDefault();
     int n = (int)strlen(texto);
-    if (n > 31)
+    if (n > 31) // limite do vetor larg[32]
         n = 31;
 
     float larg[32];
@@ -691,7 +903,15 @@ static void cartasTextoTematico(int idx, const char *texto, float cx, float y, f
     }
 }
 
-// "MUITO FACIL" vira duas linhas: MUITO (pequeno) + FACIL (grande)
+/**
+ * @brief Escreve a dificuldade nas costas da carta.
+ *
+ * "MUITO FACIL" vira duas linhas: MUITO (pequeno) e FACIL (grande).
+ *
+ * @param idx Índice da carta (0 a 4).
+ * @param cx  Centro X.
+ * @param y   Y da palavra principal.
+ */
 static void cartasRotuloTematico(int idx, float cx, float y)
 {
     const char *rotulo = rotulosDificuldade[idx];
@@ -719,6 +939,10 @@ static void cartasRotuloTematico(int idx, float cx, float y)
 // Artes procedurais (silhuetas simples inspiradas em cada boss)
 // Para usar arte propria, coloque assets/cartas/<boss>.png (veja cartasInicializar)
 // ----------------------------------------------------------------------------
+/**
+ * @brief Desenha a arte procedural da carta I (Margit: ferro e ouro).
+ * @note Deve ser chamada dentro de BeginTextureMode (ver cartasCriarCostas).
+ */
 static void cartaArteMargit(void)
 {
     const float cx = CARTA_TEX_L * 0.5f, cy = 205.0f;
@@ -754,6 +978,10 @@ static void cartaArteMargit(void)
     DrawEllipse((int)(cx + 17.0f), (int)(cy - 14.0f), 9.0f, 3.5f, (Color){255, 226, 140, 255});
 }
 
+/**
+ * @brief Desenha a arte procedural da carta II (Rennala: noite e lua cheia).
+ * @note Deve ser chamada dentro de BeginTextureMode (ver cartasCriarCostas).
+ */
 static void cartaArteRennala(void)
 {
     const float cx = CARTA_TEX_L * 0.5f, cy = 200.0f;
@@ -792,6 +1020,10 @@ static void cartaArteRennala(void)
     DrawCircle((int)(cx + 92.0f), 164, 9.0f, WHITE);
 }
 
+/**
+ * @brief Desenha a arte procedural da carta III (Radahn: estrelas e brasa).
+ * @note Deve ser chamada dentro de BeginTextureMode (ver cartasCriarCostas).
+ */
 static void cartaArteRadahn(void)
 {
     const float cx = CARTA_TEX_L * 0.5f, cy = 200.0f;
@@ -841,6 +1073,10 @@ static void cartaArteRadahn(void)
     DrawRectangle((int)(cx - 28.0f), (int)(cy - 12.0f), 56, 8, (Color){255, 170, 70, 255});
 }
 
+/**
+ * @brief Desenha a arte procedural da carta IV (Radagon: dourado).
+ * @note Deve ser chamada dentro de BeginTextureMode (ver cartasCriarCostas).
+ */
 static void cartaArteRadagon(void)
 {
     const float cx = CARTA_TEX_L * 0.5f, cy = 205.0f;
@@ -895,6 +1131,10 @@ static void cartaArteRadagon(void)
     }
 }
 
+/**
+ * @brief Desenha a arte procedural da carta V (Malenia: podridão escarlate).
+ * @note Deve ser chamada dentro de BeginTextureMode (ver cartasCriarCostas).
+ */
 static void cartaArteMalenia(void)
 {
     const float cx = CARTA_TEX_L * 0.5f, cy = 205.0f;
@@ -956,6 +1196,13 @@ static void (*const artesProcedurais[CARTAS_QTD])(void) = {cartaArteMargit, cart
 // ----------------------------------------------------------------------------
 // Monta a textura das costas da carta (uma vez, na inicializacao)
 // ----------------------------------------------------------------------------
+/**
+ * @brief Desenha uma vez as costas de uma carta em uma RenderTexture.
+ *
+ * Usa a arte de assets/cartas/<boss>.png se existir; senão, a arte procedural.
+ *
+ * @param idx Índice da carta (0 a 4).
+ */
 static void cartasCriarCostas(int idx)
 {
     const EstiloCarta *e = &estilosCartas[idx];
@@ -1024,6 +1271,14 @@ static void cartasCriarCostas(int idx)
 // ----------------------------------------------------------------------------
 // Ciclo de vida
 // ----------------------------------------------------------------------------
+/**
+ * @brief Prepara o sistema de cartas: converte o banco em cartas e gera as texturas.
+ *
+ * Precisa ser chamada depois de InitWindow (as texturas dependem da janela).
+ * Com o banco vazio, o sistema de cartas fica desativado.
+ *
+ * @param banco Banco de perguntas.
+ */
 static void cartasInicializar(Banco *banco)
 {
     memset(&estadoCartas, 0, sizeof(estadoCartas));
@@ -1075,6 +1330,9 @@ static void cartasInicializar(Banco *banco)
     }
 }
 
+/**
+ * @brief Libera as texturas, fontes e vetores do sistema de cartas.
+ */
 static void cartasFinalizar(void)
 {
     for (int i = 0; i < CARTAS_QTD; i++)
@@ -1096,18 +1354,31 @@ static void cartasFinalizar(void)
     totalCartas = 0;
 }
 
+/**
+ * @brief Diz se a tela de cartas está aberta.
+ * @return 1 se alguma fase de cartas está em andamento, 0 se não.
+ */
 static int cartasAtivo(void)
 {
     return estadoCartas.fase != CARTAS_FASE_INATIVA;
 }
 
+/**
+ * @brief Troca a fase da tela de cartas e zera o cronômetro da fase.
+ * @param fase Nova fase.
+ */
 static void cartasMudarFase(FaseCartas fase)
 {
     estadoCartas.fase = fase;
     estadoCartas.tempoFase = 0.0f;
 }
 
-// Chamada quando o herói vence um combate
+/**
+ * @brief Abre a escolha de cartas depois de o herói vencer um combate.
+ *
+ * Marca como indisponível a carta de um nível sem nenhuma pergunta no banco;
+ * se nenhum nível tiver perguntas, não abre.
+ */
 static void cartasAgendarEscolha(void)
 {
     if (todasCartas == NULL || filtroCartas == NULL || totalCartas <= 0 || cartasAtivo())
@@ -1132,6 +1403,13 @@ static void cartasAgendarEscolha(void)
 // ----------------------------------------------------------------------------
 // Layout
 // ----------------------------------------------------------------------------
+/**
+ * @brief Calcula onde fica cada uma das 5 cartas na mesa.
+ * @param i        Índice da carta (0 a 4).
+ * @param largTela Largura da tela.
+ * @param altTela  Altura da tela.
+ * @return Retângulo da carta.
+ */
 static Rectangle cartasRetanguloEscolha(int i, float largTela, float altTela)
 {
     float cw = fminf(altTela * 0.50f * ((float)CARTA_TEX_L / (float)CARTA_TEX_A), largTela * 0.15f);
@@ -1142,12 +1420,19 @@ static Rectangle cartasRetanguloEscolha(int i, float largTela, float altTela)
     return (Rectangle){x0 + i * (cw + gap), altTela * 0.54f - ch / 2.0f, cw, ch};
 }
 
+/**
+ * @brief Calcula o painel da pergunta conforme a tela e o tamanho do enunciado.
+ * @param largTela Largura da tela.
+ * @param altTela  Altura da tela.
+ * @return Posições do painel, do enunciado e dos botões.
+ */
 static LayoutPergunta cartasLayoutPergunta(float largTela, float altTela)
 {
     LayoutPergunta l;
     const float margem = 44.0f, cabecalho = 84.0f, rodape = 96.0f, bh = 72.0f, gap = 14.0f;
     float pw = fminf(largTela * 0.82f, 1200.0f);
 
+    // Mede (sem desenhar) a altura do enunciado para dimensionar o painel conforme o texto
     l.alturaEnunciado = (float)cartasTextoQuebrado(estadoCartas.carta.enunciado, 0.0f, 0.0f, pw - margem * 2.0f, 30, WHITE, 0, 0);
     float ph = 24.0f + cabecalho + l.alturaEnunciado + 26.0f + 4.0f * bh + 3.0f * gap + rodape;
     float px = (largTela - pw) / 2.0f;
@@ -1170,6 +1455,10 @@ static LayoutPergunta cartasLayoutPergunta(float largTela, float altTela)
 // ----------------------------------------------------------------------------
 // Logica
 // ----------------------------------------------------------------------------
+/**
+ * @brief Sorteia uma pergunta do nível da carta escolhida e inicia a revelação.
+ * @param idx Índice da carta escolhida (0 a 4).
+ */
 static void cartasSortearPergunta(int idx)
 {
     EstadoCartas *e = &estadoCartas;
@@ -1177,12 +1466,21 @@ static void cartasSortearPergunta(int idx)
     if (n <= 0)
         return;
 
+    // EscolherCard copia a carta sorteada para e->carta, então filtroCartas pode ser reutilizado depois
     EscolherCard(filtroCartas, &e->carta, n);
     e->escolhida = idx;
     e->hover = -1;
     cartasMudarFase(CARTAS_FASE_REVELANDO);
 }
 
+/**
+ * @brief Confere a resposta e aplica o multiplicador (acerto) ou o redutor (erro).
+ *
+ * O poder do herói nunca fica abaixo de 1.
+ *
+ * @param arena  Arena (o poder do herói é alterado).
+ * @param indice Alternativa escolhida (0 = A ... 3 = D).
+ */
 static void cartasResponder(Arena *arena, int indice)
 {
     EstadoCartas *e = &estadoCartas;
@@ -1192,6 +1490,7 @@ static void cartasResponder(Arena *arena, int indice)
     e->acertou = (toupper((unsigned char)e->letraEscolhida) == toupper((unsigned char)e->carta.correta));
     e->poderAntes = heroi->poder;
 
+    // Acerto multiplica o poder; erro reduz (fator < 1). O poder nunca fica abaixo de 1.
     double fator = e->acertou ? cartasFatorAcerto(&e->carta) : cartasFatorErro(&e->carta);
     double novo = (double)heroi->poder * fator;
     heroi->poder = clampIntMax((long long)novo, 1, PODER_MAX_INIMIGO * 2);
@@ -1215,6 +1514,18 @@ static void cartasResponder(Arena *arena, int indice)
     cartasMudarFase(CARTAS_FASE_RESULTADO);
 }
 
+/**
+ * @brief Trata mouse/teclado e avança as fases da tela de cartas.
+ *
+ * Os tempos mínimos de cada fase evitam que o mesmo clique que abriu a
+ * tela já conte como escolha ou resposta. Atalhos: 1-5 escolhem a carta,
+ * A-D respondem, Enter/Espaço fecham o resultado.
+ *
+ * @param arena    Arena (o poder do herói pode mudar).
+ * @param dt       Tempo do quadro em segundos.
+ * @param largTela Largura da tela.
+ * @param altTela  Altura da tela.
+ */
 static void cartasAtualizar(Arena *arena, float dt, float largTela, float altTela)
 {
     EstadoCartas *e = &estadoCartas;
@@ -1223,6 +1534,8 @@ static void cartasAtualizar(Arena *arena, float dt, float largTela, float altTel
     Vector2 mouse = GetMousePosition();
     int clicou = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 
+    // Os tempos mínimos (0.7s, 0.25s, 0.4s) em cada fase evitam que o mesmo clique
+    // que abriu/avançou a tela já conte como escolha ou resposta.
     switch (e->fase)
     {
     case CARTAS_FASE_ESPERA:
@@ -1254,6 +1567,7 @@ static void cartasAtualizar(Arena *arena, float dt, float largTela, float altTel
                 escolhido = e->hover;
             for (int k = 0; k < CARTAS_QTD; k++)
             {
+                // KEY_ONE..KEY_FIVE e KEY_A..KEY_D são códigos consecutivos no raylib
                 if (IsKeyPressed(KEY_ONE + k) && e->disponivel[k])
                     escolhido = k;
             }
@@ -1303,6 +1617,16 @@ static void cartasAtualizar(Arena *arena, float dt, float largTela, float altTel
 // ----------------------------------------------------------------------------
 // Desenho
 // ----------------------------------------------------------------------------
+/**
+ * @brief Desenha as costas de uma carta.
+ * @param idx    Índice da carta (0 a 4).
+ * @param centro Centro da carta na tela.
+ * @param larg   Largura.
+ * @param alt    Altura.
+ * @param rot    Rotação em graus.
+ * @param alpha  Opacidade (0 a 1).
+ * @param brilho Intensidade do brilho em volta (0 a 1).
+ */
 static void cartasDesenharCostas(int idx, Vector2 centro, float larg, float alt, float rot, float alpha, float brilho)
 {
     if (!temCostasCartas[idx] || larg < 1.0f)
@@ -1322,7 +1646,14 @@ static void cartasDesenharCostas(int idx, Vector2 centro, float larg, float alt,
     DrawTexturePro(costasCartas[idx].texture, src, dst, (Vector2){larg / 2.0f, alt / 2.0f}, rot, Fade(WHITE, alpha));
 }
 
-// Frente da carta revelada: mostra o que vale o acerto e o erro
+/**
+ * @brief Desenha a frente da carta revelada (quanto vale o acerto e o erro).
+ * @param idx          Índice da carta (0 a 4).
+ * @param centro       Centro da carta na tela.
+ * @param larg         Largura.
+ * @param alt          Altura.
+ * @param mostrarTexto 0 durante a virada (carta muito estreita para texto).
+ */
 static void cartasDesenharFrente(int idx, Vector2 centro, float larg, float alt, int mostrarTexto)
 {
     const EstiloCarta *est = &estilosCartas[idx];
@@ -1356,6 +1687,11 @@ static void cartasDesenharFrente(int idx, Vector2 centro, float larg, float alt,
     DrawText(txt, (int)(cx - MeasureText(txt, (int)(fs * 2.0f)) / 2.0f), (int)(r.y + alt * 0.71f), (int)(fs * 2.0f), (Color){255, 100, 90, 255});
 }
 
+/**
+ * @brief Desenha a mesa com as 5 cartas de costas.
+ * @param largTela Largura da tela.
+ * @param altTela  Altura da tela.
+ */
 static void cartasDesenharEscolha(float largTela, float altTela)
 {
     const EstadoCartas *e = &estadoCartas;
@@ -1386,6 +1722,11 @@ static void cartasDesenharEscolha(float largTela, float altTela)
     }
 }
 
+/**
+ * @brief Desenha a animação da carta escolhida indo ao centro e desvirando.
+ * @param largTela Largura da tela.
+ * @param altTela  Altura da tela.
+ */
 static void cartasDesenharRevelando(float largTela, float altTela)
 {
     const EstadoCartas *e = &estadoCartas;
@@ -1419,6 +1760,13 @@ static void cartasDesenharRevelando(float largTela, float altTela)
     }
 }
 
+/**
+ * @brief Desenha o painel com o enunciado e as alternativas A-D.
+ * @param arena     Arena (mostra o poder do herói).
+ * @param largTela  Largura da tela.
+ * @param altTela   Altura da tela.
+ * @param resultado 1 para destacar acerto/erro e mostrar a mudança de poder.
+ */
 static void cartasDesenharPainel(const Arena *arena, float largTela, float altTela, int resultado)
 {
     const EstadoCartas *e = &estadoCartas;
@@ -1506,6 +1854,12 @@ static void cartasDesenharPainel(const Arena *arena, float largTela, float altTe
     }
 }
 
+/**
+ * @brief Desenha a tela de cartas conforme a fase atual.
+ * @param arena    Arena.
+ * @param largTela Largura da tela.
+ * @param altTela  Altura da tela.
+ */
 static void cartasDesenhar(const Arena *arena, float largTela, float altTela)
 {
     const EstadoCartas *e = &estadoCartas;
@@ -1536,7 +1890,17 @@ static void cartasDesenhar(const Arena *arena, float largTela, float altTela)
     }
 }
 
-// Resolve o combate entre o herói e o inimigo alvo
+/**
+ * @brief Resolve o combate entre o herói e um inimigo.
+ *
+ * Vence se o poder do herói for >= ao do inimigo, e então ABSORVE o poder
+ * dele. Se perder, o herói recua e o poder não muda. Derrotar o Sif libera a
+ * forma final; derrotar o último inimigo termina a arena; nos outros casos
+ * abre a escolha de cartas.
+ *
+ * @param arena      Arena.
+ * @param idxInimigo Índice do inimigo em @c arena->inimigos.
+ */
 static void executarCombate(Arena *arena, int idxInimigo)
 {
     Inimigo *ini = &arena->inimigos[idxInimigo];
@@ -1591,7 +1955,15 @@ static void executarCombate(Arena *arena, int idxInimigo)
     }
 }
 
-// Verifica clique em itens ou inimigos no cenário
+/**
+ * @brief Decide o que fazer com um clique na arena.
+ *
+ * Clique em item: anda até ele para coletar. Clique em inimigo: anda até o
+ * lado dele para lutar. Clique no chão: apenas anda até o ponto.
+ *
+ * @param arena  Arena.
+ * @param clique Posição do clique.
+ */
 static void processarCliqueCenario(Arena *arena, Vector2 clique)
 {
     if (!arena->heroi.vivo)
@@ -1626,10 +1998,12 @@ static void processarCliqueCenario(Arena *arena, Vector2 clique)
 
         float largHit = ini->ehChefe ? 140.0f : 110.0f;
         float altHit = ini->ehChefe ? 175.0f : 155.0f;
+        // pos é a base (pés) do inimigo, então a área clicável sobe a partir dela
         Rectangle hitboxIni = {ini->pos.x - largHit / 2.0f, ini->pos.y - altHit + 10.0f, largHit, altHit};
 
         if (CheckCollisionPointRec(clique, hitboxIni))
         {
+            // o herói para ao lado do inimigo (do lado em que já está), não em cima dele
             float distanciaCombate = ini->ehChefe ? 82.0f : 68.0f;
             float lado = (arena->heroi.pos.x <= ini->pos.x) ? -distanciaCombate : distanciaCombate;
             arena->heroi.destino = (Vector2){ini->pos.x + lado, ini->pos.y};
@@ -1649,7 +2023,11 @@ static void processarCliqueCenario(Arena *arena, Vector2 clique)
     arena->heroi.inimigoAlvoIdx = -1;
 }
 
-// Atualiza a caminhada do herói e dispara coleta ou combate ao chegar no alvo
+/**
+ * @brief Move o herói até o destino e, ao chegar, coleta o item ou luta.
+ * @param arena Arena.
+ * @param dt    Tempo do quadro em segundos.
+ */
 static void atualizarHeroi(Arena *arena, float dt)
 {
     Heroi *heroi = &arena->heroi;
@@ -1673,6 +2051,7 @@ static void atualizarHeroi(Arena *arena, float dt)
         heroi->direcaoX = (dx >= 0.0f) ? 1 : -1;
     }
 
+    // Chegou (tolerância de 5 px): só agora coleta o item ou inicia o combate
     if (dist <= 5.0f)
     {
         heroi->pos = heroi->destino;
@@ -1702,6 +2081,11 @@ static void atualizarHeroi(Arena *arena, float dt)
     }
 }
 
+/**
+ * @brief Desenha um item flutuando, com nome e efeito.
+ * @param it          Item.
+ * @param selecionado 1 se é o alvo atual do herói (fica destacado).
+ */
 static void desenharItem(const Item *it, int selecionado)
 {
     if (it->coletado)
@@ -1768,6 +2152,13 @@ static void desenharItem(const Item *it, int selecionado)
     DrawText(txt, tx, ty, tamFonte, corTexto);
 }
 
+/**
+ * @brief Desenha o herói com o sprite do estágio atual, animações e poder.
+ *
+ * Se a imagem do estágio não existir, usa um sprite anterior disponível.
+ *
+ * @param heroi Herói.
+ */
 static void desenharHeroi(const Heroi *heroi)
 {
     MovimentoCorpo mov = calcularMovimentoPersonagem(1, heroi->movendo, heroi->direcaoX, 0.0f);
@@ -1821,7 +2212,8 @@ static void desenharHeroi(const Heroi *heroi)
 
     float alturaTopo = heroi->pos.y - alturaAlvo + mov.passoY;
 
-    // Seleciona o sprite correspondente ao estágio atual com fallback seguro
+    // Seleciona o sprite do estágio atual; se a imagem daquele estágio não existir,
+    // cai para um sprite anterior disponível (o jogo funciona mesmo sem todos os arquivos)
     Texture2D texAtiva = heroi->texHeroi;
     int temTexAtiva = heroi->temTexHeroi;
 
@@ -1852,11 +2244,12 @@ static void desenharHeroi(const Heroi *heroi)
         float larg = texAtiva.width * escalaBase * mov.escalaX;
         float alt = texAtiva.height * escalaBase * mov.escalaY;
 
+        // largura negativa no recorte espelha a imagem quando o herói anda para a esquerda
         float srcLarg = (heroi->direcaoX < 0) ? -(float)texAtiva.width : (float)texAtiva.width;
         Rectangle src = {0.0f, 0.0f, srcLarg, (float)texAtiva.height};
 
         Rectangle dst = {heroi->pos.x + avancoGolpeX, heroi->pos.y + mov.passoY, larg, alt};
-        Vector2 pivoPes = {larg / 2.0f, alt};
+        Vector2 pivoPes = {larg / 2.0f, alt}; // pivô nos pés: inclinação e posição partem do chão
 
         DrawTexturePro(texAtiva, src, dst, pivoPes, mov.inclinacao, tint);
 
@@ -1887,6 +2280,11 @@ static void desenharHeroi(const Heroi *heroi)
     DrawText(txtPoder, txtX, txtY, tamFonte, corNumero);
 }
 
+/**
+ * @brief Desenha um inimigo com nome e poder.
+ * @param ini         Inimigo.
+ * @param selecionado 1 se é o alvo atual do herói (fica destacado).
+ */
 static void desenharInimigo(const Inimigo *ini, int selecionado)
 {
     if (ini->derrotado)
@@ -1931,14 +2329,28 @@ static void desenharInimigo(const Inimigo *ini, int selecionado)
     DrawText(txtPoder, txtX, txtY, tamFonte, (Color){255, 65, 65, 255});
 }
 
-// Gera inimigos aleatórios com poder até 9999999 (sem nível), enquanto o herói sempre começa em 5
+/**
+ * @brief Monta uma arena nova: sorteia poderes, itens e posições.
+ *
+ * Os valores são calculados em cadeia para que SEMPRE exista uma ordem
+ * vencível: Hollow Faca -> Baú 1 -> Hollow Tocha -> Baú 2 -> Espada
+ * (multiplica) -> Sif -> Gwyn. O teto do Gwyn é sorteado entre 35 e
+ * 9.999.999. As cartas de pergunta (acerto multiplica, erro reduz) ficam
+ * por conta do jogador e podem melhorar ou piorar esse caminho.
+ *
+ * @param arena    Arena a preencher (o herói volta para o poder inicial).
+ * @param largTela Largura da tela.
+ * @param altTela  Altura da tela.
+ */
 static void gerarInimigosAleatorios(Arena *arena, float largTela, float altTela)
 {
     arena->vitoriaArena = 0;
 
     int poderInicial = PODER_INICIAL_HEROI; // Herói sempre começa em 5
 
-    // Sorteia o teto de poder do chefe final (Gwyn) entre 35 e 9999999
+    // Sorteia o teto de poder do chefe final (Gwyn) entre 35 e 9999999.
+    // Sorteia primeiro a faixa (4 níveis de grandeza) para valores pequenos também aparecerem
+    // com frequência; sortear direto em 35..9999999 quase sempre daria números enormes.
     int faixa = GetRandomValue(1, 4);
     int alvoGwyn = 60;
     if (faixa == 1)
@@ -1963,6 +2375,7 @@ static void gerarInimigosAleatorios(Arena *arena, float largTela, float altTela)
     int bau2 = GetRandomValue(6, 20);
     long long baseAntesMult = poderAposTocha + bau2;
 
+    // O multiplicador da espada é calculado para o herói conseguir alcançar o poder do Gwyn sorteado
     int multArma = 4;
     if (alvoGwyn > 300)
     {
@@ -2059,7 +2472,12 @@ static void gerarInimigosAleatorios(Arena *arena, float largTela, float altTela)
     arena->inimigos[3].derrotado = 0;
 }
 
-// Alterna entre tela cheia e janela, reajustando as posicoes para o novo tamanho
+/**
+ * @brief Alterna entre tela cheia e janela, reposicionando tudo na nova escala.
+ * @param arena    Arena (posições são reescaladas).
+ * @param largTela Largura atual; recebe a nova.
+ * @param altTela  Altura atual; recebe a nova.
+ */
 static void alternarTelaCheia(Arena *arena, float *largTela, float *altTela)
 {
     float antigaL = *largTela;
@@ -2107,10 +2525,22 @@ static void alternarTelaCheia(Arena *arena, float *largTela, float *altTela)
     }
 }
 
+/**
+ * @brief Abre a janela do raylib e roda a arena até o jogador sair.
+ *
+ * Carrega imagens (o jogo funciona mesmo sem elas), gera a arena, executa o
+ * laço principal (F11 alterna tela cheia; ESC sai da tela cheia ou fecha) e
+ * libera tudo no fim.
+ *
+ * @param banco Banco de perguntas usado pelas cartas.
+ */
 void executarInterfaceGrafica(Banco *banco)
 {
     srand((unsigned int)time(NULL));
     SetRandomSeed((unsigned int)time(NULL));
+
+    // Limpa avisos que sobraram de uma partida anterior (o vetor é static)
+    memset(popups, 0, sizeof(popups));
 
     InitWindow(0, 0, "FLAME CHAOS");
     if (!IsWindowFullscreen())
@@ -2130,6 +2560,8 @@ void executarInterfaceGrafica(Banco *banco)
 
     Arena arena = {0};
 
+    // Para cada imagem, tenta alguns caminhos (pasta assets, pasta acima, pasta atual)
+    // e usa o primeiro que existir; sem imagem, o jogo roda sem ela (fundo preto).
     // Cenário panorâmico
     const char *caminhosCenario[4] = {"assets/dark.png", "assets/dark.jpg", "../assets/dark.png", "dark.png"};
     for (int i = 0; i < 4; i++)
@@ -2226,6 +2658,7 @@ void executarInterfaceGrafica(Banco *banco)
                 sair = 1;
         }
 
+        // Com as cartas na tela, o clique é das cartas; o cenário fica bloqueado
         if (cartasAtivo())
         {
             cartasAtualizar(&arena, dt, largTela, altTela);

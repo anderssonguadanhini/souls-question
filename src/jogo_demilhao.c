@@ -62,12 +62,12 @@ COMO O CSV É ENCONTRADO (nesta ordem)
 #endif
 
 // Tipos de busca de arquivo (uso interno)
-#define MODO_CSV_EXATO    0 // arquivo chamado exatamente perguntas_souls_like.csv
-#define MODO_CSV_QUALQUER 1 // qualquer arquivo perguntas*.csv
-#define MODO_BIN          2 // arquivo perguntas.bin
+#define MODO_CSV_EXATO    0 ///< Busca o arquivo chamado exatamente perguntas_souls_like.csv.
+#define MODO_CSV_QUALQUER 1 ///< Busca qualquer arquivo perguntas*.csv.
+#define MODO_BIN          2 ///< Busca o arquivo perguntas.bin.
 
-#define PROFUNDIDADE_BUSCA 3 // quantas subpastas para baixo a busca desce
-#define NIVEIS_ACIMA       2 // quantas pastas para cima a busca sobe
+#define PROFUNDIDADE_BUSCA 3 ///< Quantas subpastas para baixo a busca desce.
+#define NIVEIS_ACIMA       2 ///< Quantas pastas para cima a busca sobe.
 
 /* ---------------------------------------------------------------
  * PROTÓTIPOS PRIVADOS (static = só existem dentro deste arquivo,
@@ -82,51 +82,46 @@ static int buscarNaPasta(const char *pasta, int profundidade, int modo, char *sa
 static int procurarArquivo(int modo, char *saida, size_t tam);
 static int pedirCaminho(char *saida, size_t tam);
 
-/* ---------------------------------------------------------------
- * configurarTerminal
- * No Windows, coloca o console em UTF-8 para mostrar os acentos.
- * No Linux o terminal já é UTF-8, então não precisa fazer nada.
- * --------------------------------------------------------------- */
+/**
+ * @brief Coloca o console em UTF-8 (acentos) no Windows; no Linux não faz nada.
+ */
 void configurarTerminal(void)
 {
 #ifdef _WIN32
-    SetConsoleOutputCP(65001);
+    SetConsoleOutputCP(65001); // saída (printf) em UTF-8
+    SetConsoleCP(65001);       // entrada também: acentos digitados no cadastro chegam em UTF-8
 #endif
 }
 
-/* ---------------------------------------------------------------
- * limparTela
- * Limpa o terminal usando o comando certo para cada sistema
- * (definido lá no começo pelo LIMPAR_TELA).
- * O (void) avisa ao compilador que ignoramos o retorno do system.
- * --------------------------------------------------------------- */
+/**
+ * @brief Limpa o terminal (cls no Windows, clear no Linux).
+ */
 void limparTela(void)
 {
     (void)LIMPAR_TELA();
 }
 
-/* ---------------------------------------------------------------
- * pausar
- * Espera o jogador apertar Enter. Usa só getchar, então é padrão
- * C e funciona igual no Windows e no Linux.
- * --------------------------------------------------------------- */
+/**
+ * @brief Espera o jogador apertar Enter.
+ *
+ * Todas as leituras do programa consomem a linha inteira (fgets), então
+ * basta ler UMA linha aqui.
+ */
 void pausar(void)
 {
     printf("\nPressione Enter para continuar...");
+    fflush(stdout);
     int c;
-    // descarta o que sobrou no buffer até o fim da linha
     while ((c = getchar()) != '\n' && c != EOF)
     {
     }
-    // espera um novo Enter
-    getchar();
 }
 
-/* ---------------------------------------------------------------
- * arquivoExiste
- * Tenta abrir o arquivo para leitura. Retorna 1 se conseguiu
- * (o arquivo existe), ou 0 se não.
- * --------------------------------------------------------------- */
+/**
+ * @brief Verifica se um arquivo existe (consegue ser aberto para leitura).
+ * @param caminho Caminho do arquivo.
+ * @return 1 se existe, 0 se não.
+ */
 int arquivoExiste(const char *caminho)
 {
     FILE *arq = fopen(caminho, "rb");
@@ -138,12 +133,16 @@ int arquivoExiste(const char *caminho)
     return 1;
 }
 
-/* ---------------------------------------------------------------
- * igualIgnorandoCaixa
- * Compara dois textos sem diferenciar maiúscula de minúscula.
- * Necessário porque o Linux diferencia "Perguntas.csv" de
- * "perguntas.csv" e o Windows não. Retorna 1 se forem iguais.
- * --------------------------------------------------------------- */
+/**
+ * @brief Compara dois textos sem diferenciar maiúsculas de minúsculas.
+ *
+ * Necessário porque o Linux diferencia "Perguntas.csv" de "perguntas.csv"
+ * e o Windows não.
+ *
+ * @param a Primeiro texto.
+ * @param b Segundo texto.
+ * @return 1 se forem iguais, 0 se não.
+ */
 static int igualIgnorandoCaixa(const char *a, const char *b)
 {
     while (*a != '\0' && *b != '\0')
@@ -158,14 +157,13 @@ static int igualIgnorandoCaixa(const char *a, const char *b)
     return *a == *b; // os dois terminaram juntos?
 }
 
-/* ---------------------------------------------------------------
- * nomeCombina
- * Diz se o nome de um arquivo é o que estamos procurando:
- *  - MODO_CSV_EXATO:   perguntas_souls_like.csv
- *  - MODO_CSV_QUALQUER: começa com "perguntas" e termina com ".csv"
- *  - MODO_BIN:         perguntas.bin
- * Retorna 1 se combina, ou 0 se não.
- * --------------------------------------------------------------- */
+/**
+ * @brief Diz se o nome de um arquivo é o que está sendo procurado.
+ * @param nome Nome do arquivo (sem a pasta).
+ * @param modo MODO_CSV_EXATO (perguntas_souls_like.csv), MODO_CSV_QUALQUER
+ *             (perguntas*.csv) ou MODO_BIN (perguntas.bin).
+ * @return 1 se combina, 0 se não.
+ */
 static int nomeCombina(const char *nome, int modo)
 {
     if (modo == MODO_CSV_EXATO)
@@ -194,15 +192,16 @@ static int nomeCombina(const char *nome, int modo)
     return igualIgnorandoCaixa(nome + n - 4, ".csv");
 }
 
-/* ---------------------------------------------------------------
- * pastaDoExecutavel
- * Descobre em qual pasta o programa (.exe ou binário) está guardado,
- * e não de onde ele foi executado. Isso muda de sistema para sistema:
- *  - Windows: GetModuleFileNameA
- *  - Linux:   readlink("/proc/self/exe")
- * Escreve o caminho em "saida" (sempre com '/') e retorna 1 se deu
- * certo, ou 0 se não foi possível descobrir.
- * --------------------------------------------------------------- */
+/**
+ * @brief Descobre a pasta onde o executável está guardado.
+ *
+ * Windows: GetModuleFileNameA. Linux: readlink("/proc/self/exe").
+ * O caminho é devolvido sempre com '/'.
+ *
+ * @param saida Recebe o caminho da pasta.
+ * @param tam   Tamanho de @p saida.
+ * @return 1 se conseguiu, 0 se não.
+ */
 static int pastaDoExecutavel(char *saida, size_t tam)
 {
 #ifdef _WIN32
@@ -238,15 +237,23 @@ static int pastaDoExecutavel(char *saida, size_t tam)
     return 1;
 }
 
-/* ---------------------------------------------------------------
- * tratarEntrada
- * Analisa UM item (arquivo ou pasta) encontrado dentro de uma pasta.
- * A busca é feita em duas fases, para os arquivos mais próximos
- * serem preferidos aos das subpastas:
- *  - fase 0: só olha arquivos e vê se o nome combina;
- *  - fase 1: só olha subpastas e procura dentro delas.
- * Retorna 1 se achou o arquivo (caminho escrito em "saida").
- * --------------------------------------------------------------- */
+/**
+ * @brief Analisa um item (arquivo ou pasta) encontrado durante a busca.
+ *
+ * A busca tem duas fases para preferir arquivos mais próximos: na fase 0 só
+ * olha arquivos; na fase 1 entra nas subpastas. Ignora itens ocultos
+ * (como .git) e node_modules.
+ *
+ * @param pasta        Pasta onde o item está.
+ * @param nome         Nome do item.
+ * @param ehPasta      1 se o item é uma pasta.
+ * @param fase         0 = arquivos, 1 = subpastas.
+ * @param profundidade Quantos níveis ainda pode descer.
+ * @param modo         Tipo de arquivo procurado (ver nomeCombina).
+ * @param saida        Recebe o caminho encontrado.
+ * @param tam          Tamanho de @p saida.
+ * @return 1 se achou, 0 se não.
+ */
 static int tratarEntrada(const char *pasta, const char *nome, int ehPasta, int fase,
                   int profundidade, int modo, char *saida, size_t tam)
 {
@@ -271,15 +278,18 @@ static int tratarEntrada(const char *pasta, const char *nome, int ehPasta, int f
     return 0;
 }
 
-/* ---------------------------------------------------------------
- * buscarNaPasta
- * Procura o arquivo dentro de "pasta" e, descendo até "profundidade"
- * níveis, dentro das subpastas dela. Listar o conteúdo de uma pasta
- * é diferente em cada sistema:
- *  - Windows: FindFirstFileA / FindNextFileA
- *  - Linux:   opendir / readdir
- * Retorna 1 se achou (caminho em "saida"), ou 0 se não achou.
- * --------------------------------------------------------------- */
+/**
+ * @brief Procura o arquivo em uma pasta e nas subpastas dela.
+ *
+ * Windows: FindFirstFileA/FindNextFileA. Linux: opendir/readdir.
+ *
+ * @param pasta        Pasta inicial.
+ * @param profundidade Quantos níveis de subpasta pode descer.
+ * @param modo         Tipo de arquivo procurado (ver nomeCombina).
+ * @param saida        Recebe o caminho encontrado.
+ * @param tam          Tamanho de @p saida.
+ * @return 1 se achou, 0 se não.
+ */
 static int buscarNaPasta(const char *pasta, int profundidade, int modo, char *saida, size_t tam)
 {
     for (int fase = 0; fase < 2; fase++)
@@ -344,14 +354,17 @@ static int buscarNaPasta(const char *pasta, int profundidade, int modo, char *sa
     return 0;
 }
 
-/* ---------------------------------------------------------------
- * procurarArquivo
- * Procura o arquivo (conforme o "modo") a partir de dois pontos de
- * partida: a pasta de onde o programa foi executado e a pasta onde o
- * executável está. De cada um, também sobe algumas pastas
- * (NIVEIS_ACIMA), e em cada nível olha também todas as subpastas.
- * Retorna 1 se achou (caminho em "saida"), ou 0 se não achou.
- * --------------------------------------------------------------- */
+/**
+ * @brief Procura o arquivo a partir da pasta atual e da pasta do executável.
+ *
+ * De cada ponto de partida, sobe até NIVEIS_ACIMA pastas e, em cada uma,
+ * desce até PROFUNDIDADE_BUSCA níveis de subpastas.
+ *
+ * @param modo  Tipo de arquivo procurado (ver nomeCombina).
+ * @param saida Recebe o caminho encontrado.
+ * @param tam   Tamanho de @p saida.
+ * @return 1 se achou, 0 se não.
+ */
 static int procurarArquivo(int modo, char *saida, size_t tam)
 {
     char pastaExe[TAM_CAMINHO];
@@ -386,12 +399,15 @@ static int procurarArquivo(int modo, char *saida, size_t tam)
     return 0;
 }
 
-/* ---------------------------------------------------------------
- * pedirCaminho
- * Último recurso: pede para o usuário digitar (ou arrastar para o
- * terminal) o caminho do CSV. Retira aspas, que o Windows coloca ao
- * arrastar um arquivo. Retorna 1 se o arquivo existe, ou 0 se não.
- * --------------------------------------------------------------- */
+/**
+ * @brief Último recurso: pede ao usuário o caminho do CSV.
+ *
+ * Retira aspas, que o Windows coloca ao arrastar um arquivo para o terminal.
+ *
+ * @param saida Recebe o caminho digitado.
+ * @param tam   Tamanho de @p saida.
+ * @return 1 se o arquivo existe, 0 se não (ou se o usuário só apertou Enter).
+ */
 static int pedirCaminho(char *saida, size_t tam)
 {
     printf("Não encontrei o CSV de perguntas automaticamente.\n");
@@ -423,12 +439,12 @@ static int pedirCaminho(char *saida, size_t tam)
     return 1;
 }
 
-/* ---------------------------------------------------------------
- * caminhoDoBinario
- * Define onde o .bin será gravado: na mesma pasta do CSV que foi
- * usado. Assim o .bin sempre fica junto do CSV, não importa de onde
- * o programa for executado.
- * --------------------------------------------------------------- */
+/**
+ * @brief Monta o caminho do .bin: na mesma pasta do CSV usado.
+ * @param caminhoCSV Caminho do CSV (aceita '/' e '\\').
+ * @param saida      Recebe o caminho do .bin.
+ * @param tam        Tamanho de @p saida.
+ */
 void caminhoDoBinario(const char *caminhoCSV, char *saida, size_t tam)
 {
     // Copia o caminho do CSV e corta o nome do arquivo (fica só a pasta)
@@ -451,12 +467,11 @@ void caminhoDoBinario(const char *caminhoCSV, char *saida, size_t tam)
     strncat(saida, NOME_BIN, tam - strlen(saida) - 1);
 }
 
-/* ---------------------------------------------------------------
- * nivelDoTexto
- * Converte o texto da dificuldade (como vem no CSV) em número.
- * Retorna 1 a 5, ou 0 se o texto não for reconhecido.
- * strcmp devolve 0 quando os dois textos são iguais.
- * --------------------------------------------------------------- */
+/**
+ * @brief Converte o texto da dificuldade (como no CSV) em número.
+ * @param texto "Muito Fácil", "Fácil", "Médio", "Difícil" ou "Muito Difícil".
+ * @return 1 a 5, ou 0 se o texto não for reconhecido.
+ */
 int nivelDoTexto(const char *texto)
 {
     if (strcmp(texto, "Muito Fácil") == 0)
@@ -472,12 +487,19 @@ int nivelDoTexto(const char *texto)
     return 0; // não reconhecido
 }
 
-/* ---------------------------------------------------------------
- * carregarCSV
- * Lê o arquivo .csv e guarda cada pergunta no vetor dinâmico.
- * Retorna: a quantidade de perguntas guardadas, ou -1 se der erro
- * (arquivo não abriu ou faltou memória).
- * --------------------------------------------------------------- */
+/**
+ * @brief Lê o CSV e acrescenta as perguntas ao vetor dinâmico.
+ *
+ * Formato: id,dificuldade,jogo,pergunta,alternativa_a,alternativa_b,
+ * alternativa_c,alternativa_d,resposta_correta (a 1ª linha é o cabeçalho).
+ * Linhas com número errado de campos, dificuldade desconhecida ou resposta
+ * fora de A-D são ignoradas. O vetor começa com 16 posições e dobra
+ * quando enche.
+ *
+ * @param banco   Banco que recebe as perguntas.
+ * @param arquivo Caminho do CSV.
+ * @return Quantidade de perguntas no banco, ou -1 se der erro.
+ */
 int carregarCSV(Banco *banco, const char *arquivo)
 {
     // Abre o arquivo para leitura ("r")
@@ -525,6 +547,14 @@ int carregarCSV(Banco *banco, const char *arquivo)
             continue; // dificuldade desconhecida: ignora
         }
 
+        // A resposta precisa ser A, B, C ou D (aceita minúscula e guarda maiúscula,
+        // porque o resto do programa compara com 'A'..'D')
+        char correta = (char)toupper((unsigned char)campo[8][0]);
+        if (correta < 'A' || correta > 'D')
+        {
+            continue; // resposta inválida: ignora
+        }
+
         // Se o vetor está cheio, aumenta a capacidade:
         // começa com 16 e depois dobra (16, 32, 64...)
         if (banco->quantidade == banco->capacidade)
@@ -563,7 +593,7 @@ int carregarCSV(Banco *banco, const char *arquivo)
         {
             snprintf(p->alternativa[i], sizeof(p->alternativa[i]), "%s", campo[4 + i]);
         }
-        p->correta = campo[8][0]; // só a primeira letra: 'A', 'B', 'C' ou 'D'
+        p->correta = correta; // 'A', 'B', 'C' ou 'D' (já validada acima)
         banco->quantidade++;      // conta a pergunta guardada
     }
 
@@ -571,11 +601,11 @@ int carregarCSV(Banco *banco, const char *arquivo)
     return banco->quantidade; // devolve quantas perguntas foram lidas
 }
 
-/* ---------------------------------------------------------------
- * textoDoNivel
- * Faz o caminho inverso de nivelDoTexto: converte o número (1 a 5)
- * no texto da dificuldade. Usada na exportação para CSV.
- * --------------------------------------------------------------- */
+/**
+ * @brief Converte o nível (1 a 5) no texto da dificuldade.
+ * @param nivel Nível de 1 a 5.
+ * @return Texto do nível, ou "" se for inválido.
+ */
 const char *textoDoNivel(int nivel)
 {
     if (nivel == 1) return "Muito Fácil";
@@ -586,12 +616,12 @@ const char *textoDoNivel(int nivel)
     return "";
 }
 
-/* ---------------------------------------------------------------
- * exportarCSV
- * Grava as perguntas atuais em um arquivo .csv (separado por vírgula),
- * no mesmo formato do CSV original, para poder ser lido de volta.
- * Retorna 0 se deu certo, ou -1 se não conseguiu criar o arquivo.
- * --------------------------------------------------------------- */
+/**
+ * @brief Grava as perguntas atuais em um .csv no mesmo formato do original.
+ * @param banco   Banco de perguntas.
+ * @param arquivo Caminho do arquivo a criar.
+ * @return 0 se deu certo, -1 se não conseguiu criar o arquivo.
+ */
 int exportarCSV(const Banco *banco, const char *arquivo)
 {
     // Abre para escrita ("w"): cria o arquivo ou apaga o que existir
@@ -619,13 +649,15 @@ int exportarCSV(const Banco *banco, const char *arquivo)
     return 0;
 }
 
-/* ---------------------------------------------------------------
- * salvarBinario
- * Grava o banco inteiro em um arquivo binário.
- * Formato do arquivo: primeiro a quantidade (um int), depois o vetor
- * de perguntas de uma vez só.
- * Retorna 0 se deu certo, ou 1 se não conseguiu criar o arquivo.
- * --------------------------------------------------------------- */
+/**
+ * @brief Grava o banco inteiro em um arquivo binário.
+ *
+ * Formato: a quantidade (um int) seguida do vetor de Perguntas.
+ *
+ * @param banco   Banco de perguntas.
+ * @param arquivo Caminho do .bin.
+ * @return 0 se deu certo, 1 se não conseguiu criar o arquivo.
+ */
 int salvarBinario(const Banco *banco, const char *arquivo)
 {
     // "wb" = escrita em modo binário
@@ -644,12 +676,13 @@ int salvarBinario(const Banco *banco, const char *arquivo)
     return 0;
 }
 
-/* ---------------------------------------------------------------
- * carregarBinario
- * Lê o arquivo binário e preenche o banco.
- * Retorna: a quantidade lida (>0), 0 se o arquivo não existe
- * (primeira execução), ou -1 se o arquivo está corrompido/sem memória.
- * --------------------------------------------------------------- */
+/**
+ * @brief Lê o banco de um arquivo binário criado por salvarBinario.
+ * @param banco   Banco que recebe as perguntas.
+ * @param arquivo Caminho do .bin.
+ * @return Quantidade lida (>0), 0 se o arquivo não existe,
+ *         ou -1 se estiver corrompido / faltar memória.
+ */
 int carregarBinario(Banco *banco, const char *arquivo)
 {
     // "rb" = leitura em modo binário
@@ -692,16 +725,20 @@ int carregarBinario(Banco *banco, const char *arquivo)
     return qtd;
 }
 
-/* ---------------------------------------------------------------
- * iniciarBanco
- * Decide de onde vêm as perguntas ao abrir o programa:
- *  - se o usuário informou um CSV (argv[1]): lê ele, ignorando o .bin;
- *  - senão, se existe o .bin: lê só ele (já tem as alterações salvas);
- *  - senão (1ª execução): procura o CSV nas pastas e lê; se não achar,
- *    pede para o usuário digitar o caminho.
- * Em "caminhoBin" devolve onde o .bin deve ser gravado ao sair.
- * Retorna a quantidade de perguntas, ou -1 se der erro.
- * --------------------------------------------------------------- */
+/**
+ * @brief Carrega as perguntas ao abrir o programa.
+ *
+ * - Se @p csvInformado não for NULL: lê esse CSV (ignora o .bin).
+ * - Senão, procura o CSV (nome exato, depois perguntas*.csv, depois pede o
+ *   caminho). Se existir um .bin ao lado dele, lê só o .bin (já tem as
+ *   alterações salvas); se o .bin estiver corrompido, avisa e lê o CSV.
+ *
+ * @param banco        Banco que recebe as perguntas.
+ * @param csvInformado CSV escolhido pelo usuário (argv[1]) ou NULL.
+ * @param caminhoBin   Recebe onde o .bin deve ser gravado ao sair.
+ * @param tamBin       Tamanho de @p caminhoBin.
+ * @return Quantidade de perguntas, ou -1 se der erro.
+ */
 int iniciarBanco(Banco *banco, const char *csvInformado, char *caminhoBin, size_t tamBin)
 {
     char caminhoCSV[TAM_CAMINHO];
@@ -713,30 +750,31 @@ int iniciarBanco(Banco *banco, const char *csvInformado, char *caminhoBin, size_
     }
     else
     {
-        // Procura o .bin; se existe, usa só ele
-        char achadoBin[TAM_CAMINHO];
-        if (procurarArquivo(MODO_BIN, achadoBin, sizeof(achadoBin)))
-        {
-            int r = carregarBinario(banco, achadoBin);
-            if (r > 0)
-            {
-                snprintf(caminhoBin, tamBin, "%s", achadoBin);
-                return r; // já existe .bin: usa só ele
-            }
-            if (r < 0)
-            {
-                return -1; // .bin corrompido
-            }
-        }
-
-        // Sem .bin (primeira execução): procura o CSV.
-        // 1º tenta o nome exato; 2º qualquer perguntas*.csv; 3º pergunta ao usuário
+        // Procura o CSV: 1º o nome exato; 2º qualquer perguntas*.csv; 3º pergunta ao usuário
         if (!procurarArquivo(MODO_CSV_EXATO, caminhoCSV, sizeof(caminhoCSV)) &&
             !procurarArquivo(MODO_CSV_QUALQUER, caminhoCSV, sizeof(caminhoCSV)) &&
             !pedirCaminho(caminhoCSV, sizeof(caminhoCSV)))
         {
             return -1; // não achou o CSV
         }
+
+        // O .bin é sempre gravado ao lado do CSV, então só olha ali.
+        // (Antes o .bin era procurado em pastas acima/abaixo e podia
+        // carregar o perguntas.bin de OUTRO projeto da mesma pasta.)
+        char achadoBin[TAM_CAMINHO];
+        caminhoDoBinario(caminhoCSV, achadoBin, sizeof(achadoBin));
+        int r = carregarBinario(banco, achadoBin);
+        if (r > 0)
+        {
+            snprintf(caminhoBin, tamBin, "%s", achadoBin);
+            return r; // já existe .bin: usa só ele
+        }
+        if (r < 0)
+        {
+            // .bin quebrado: avisa e recomeça do CSV (o .bin é regravado ao sair)
+            printf("Aviso: '%s' está corrompido; recarregando do CSV.\n", achadoBin);
+        }
+        // r == 0: primeira execução (sem .bin), segue lendo o CSV
     }
 
     printf("Lendo perguntas de: %s\n", caminhoCSV);

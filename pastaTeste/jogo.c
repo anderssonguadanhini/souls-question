@@ -1,4 +1,8 @@
-//formata;'ao levemente errada
+/**
+ * @file jogo.c
+ * @brief Protótipo antigo da partida no terminal (não faz parte do programa
+ *        final; a versão atual está em src/main.c).
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,11 +10,13 @@
 
 #include "jogo.h"
 
-//sera mudado para suportar um struc de perguntas no futuro
-
-/*
- * Sorteia uma pergunta de determinada dificuldade,
- * sem repetir perguntas já utilizadas na partida.
+/**
+ * @brief Sorteia uma pergunta de uma dificuldade, sem repetir as já usadas.
+ * @param perguntas   Vetor de perguntas.
+ * @param quantidade  Quantidade de perguntas.
+ * @param dificuldade Nível desejado (1 a 5).
+ * @param usadas      Marca (1) as perguntas já usadas na partida.
+ * @return Índice da pergunta sorteada, ou -1 se não houver disponível.
  */
 int sortearPergunta(Pergunta *perguntas, int quantidade,
                     int dificuldade, int usadas[]) {
@@ -47,8 +53,10 @@ int sortearPergunta(Pergunta *perguntas, int quantidade,
 }
 
 
-/*
- * Apresenta uma pergunta e verifica a resposta.
+/**
+ * @brief Mostra uma pergunta e confere a resposta digitada.
+ * @param pergunta Pergunta a apresentar.
+ * @return 1 se acertou, 0 se errou.
  */
 int responderPergunta(Pergunta pergunta) {
 
@@ -77,8 +85,10 @@ int responderPergunta(Pergunta pergunta) {
 }
 
 
-/*
- * Controla as 15 perguntas da partida.
+/**
+ * @brief Controla as 15 perguntas de uma partida.
+ * @param perguntas  Vetor de perguntas.
+ * @param quantidade Quantidade de perguntas.
  */
 void jogarPartida(Pergunta *perguntas, int quantidade) {
 

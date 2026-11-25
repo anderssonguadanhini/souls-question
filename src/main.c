@@ -39,7 +39,9 @@
 #include "interface.h"
 
 /**
- * @brief Retorna a cor ANSI correspondente ao nível (1 a 5).
+ * @brief Retorna a cor ANSI usada na partida para cada nível.
+ * @param nivel Nível de 1 (Muito Fácil) a 5 (Muito Difícil).
+ * @return Código de cor ANSI (COR_RESET se o nível for inválido).
  */
 static const char *corNivelJogo(int nivel)
 {
@@ -61,7 +63,9 @@ static const char *corNivelJogo(int nivel)
 }
 
 /**
- * @brief Exibe as estatísticas de perguntas por nível de dificuldade.
+ * @brief Mostra quantas perguntas existem por nível, o mínimo exigido no CSV
+ *        e quantas cada partida usa.
+ * @param banco Banco de perguntas.
  */
 static void exibirEstatisticasBanco(const Banco *banco)
 {
@@ -85,7 +89,60 @@ static void exibirEstatisticasBanco(const Banco *banco)
 }
 
 /**
- * @brief Executa uma partida completa de 15 perguntas no terminal com marcos de segurança.
+ * @brief Lê uma linha inteira do teclado e devolve a letra digitada (maiúscula).
+ *
+ * Lê a linha toda (e não só um caractere com scanf) para que uma entrada como
+ * "xyz" gere um único aviso, e não sobre lixo no buffer para a próxima leitura.
+ *
+ * @param mensagem Texto mostrado antes da leitura.
+ * @param letra    Recebe a letra em maiúscula, ou '\0' se a linha não tiver
+ *                 exatamente um caractere (fora espaços).
+ * @return 1 se leu uma linha, 0 se a entrada foi fechada (EOF).
+ */
+static int lerResposta(const char *mensagem, char *letra)
+{
+    char linha[64];
+    printf("%s", mensagem);
+    fflush(stdout);
+
+    if (fgets(linha, sizeof(linha), stdin) == NULL)
+    {
+        return 0;
+    }
+    // linha maior que o buffer: descarta o resto para não virar outra resposta
+    if (strchr(linha, '\n') == NULL)
+    {
+        int c;
+        while ((c = getchar()) != '\n' && c != EOF)
+        {
+        }
+    }
+
+    // pula espaços no começo e no fim
+    char *inicio = linha;
+    while (isspace((unsigned char)*inicio))
+    {
+        inicio++;
+    }
+    size_t tam = strlen(inicio);
+    while (tam > 0 && isspace((unsigned char)inicio[tam - 1]))
+    {
+        tam--;
+    }
+
+    *letra = (tam == 1) ? (char)toupper((unsigned char)inicio[0]) : '\0';
+    return 1;
+}
+
+/**
+ * @brief Joga uma partida de 15 perguntas no terminal (regras do Show do Milhão).
+ *
+ * Perguntas 1-2 Muito Fácil, 3-4 Fácil, 5-8 Médio, 9-12 Difícil e 13-15
+ * Muito Difícil, sem repetir pergunta. As perguntas 5 e 10 são marcos de
+ * segurança: errando depois delas, o jogador leva o valor do último marco.
+ * O jogador pode parar ([P]) e levar o prêmio acumulado.
+ *
+ * @param banco Banco de perguntas.
  */
 static void iniciarPartida(const Banco *banco)
 {
@@ -129,6 +186,13 @@ static void iniciarPartida(const Banco *banco)
             nivelExigido = 5; // Muito Difícil (13 a 15 - 1 Milhão)
 
         int *candidatas = malloc((size_t)banco->quantidade * sizeof(int));
+        if (candidatas == NULL)
+        {
+            tocarSom(3);
+            printf("%s[!] Erro de memoria durante a partida!%s\n", COR_VERMELHO, COR_RESET);
+            venceuTudo = 0;
+            break;
+        }
         int qtdCandidatas = 0;
 
         for (int i = 0; i < banco->quantidade; i++)
@@ -183,16 +247,11 @@ static void iniciarPartida(const Banco *banco)
         char resp = '\0';
         while (1)
         {
-            printf("\n  Sua resposta (A, B, C, D) ou [P] para Parar: ");
-            if (scanf(" %c", &resp) != 1)
+            if (!lerResposta("\n  Sua resposta (A, B, C, D) ou [P] para Parar: ", &resp))
             {
-                int c;
-                while ((c = getchar()) != '\n' && c != EOF)
-                {
-                }
-                continue;
+                resp = 'P'; // entrada fechada (EOF): para a partida em vez de travar em loop
+                break;
             }
-            resp = (char)toupper((unsigned char)resp);
             if ((resp >= 'A' && resp <= 'D') || resp == 'P')
             {
                 break;
@@ -255,7 +314,9 @@ static void iniciarPartida(const Banco *banco)
 }
 
 /**
- * @brief Submenu de gerenciamento do banco de perguntas.
+ * @brief Submenu do cadastro: inserir, listar, pesquisar, alterar, excluir,
+ *        exportar e ver estatísticas.
+ * @param banco Banco de perguntas (pode ser alterado).
  */
 static void submenuGerenciar(Banco *banco)
 {
@@ -341,9 +402,14 @@ static void mostrarMenu(void)
 }
 
 /**
- * @brief Função principal.
+ * @brief Função principal: carrega as perguntas, mostra o menu e salva ao sair.
+ *
+ * Na primeira execução lê o CSV; nas seguintes, o arquivo binário
+ * (perguntas.bin, gravado ao lado do CSV). Ao escolher "Sair", todas as
+ * alterações são salvas no binário.
+ *
  * @param argc Quantidade de argumentos.
- * @param argv Argumentos: o primeiro (opcional) é o caminho do CSV.
+ * @param argv Argumentos: o primeiro (opcional) é o caminho de um CSV.
  *             Ex.: ./flameChaos caminho/do/perguntas.csv
  * @return EXIT_SUCCESS se tudo deu certo, EXIT_FAILURE se não carregou as perguntas.
  */
@@ -369,6 +435,13 @@ int main(int argc, char *argv[])
     // 1ª execução: lê o CSV (ou fallback em assets/). Nas outras: lê o binário
     if (iniciarBanco(&banco, csvInformado, caminhoBin, sizeof(caminhoBin)) <= 0)
     {
+        // Descarta o que a 1ª tentativa possa ter lido pela metade,
+        // senão a 2ª tentativa somaria perguntas repetidas ao vetor
+        free(banco.dados);
+        banco.dados = NULL;
+        banco.quantidade = 0;
+        banco.capacidade = 0;
+
         if (iniciarBanco(&banco, "assets/perguntas_souls_like.csv", caminhoBin, sizeof(caminhoBin)) <= 0)
         {
             printf("Erro ao carregar as perguntas.\n");

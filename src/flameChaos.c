@@ -23,7 +23,17 @@
  * Funções auxiliares (visíveis só neste arquivo)
  * --------------------------------------------------------------- */
 
-/** @brief Lê uma linha do teclado sem o Enter. Retorna 0 se der EOF. */
+/**
+ * @brief Lê uma linha do teclado, sem o Enter do final.
+ *
+ * Se a linha for maior que o destino, o resto é descartado para não virar
+ * a próxima leitura.
+ *
+ * @param mensagem Texto mostrado antes da leitura.
+ * @param destino  Onde a linha é guardada.
+ * @param tam      Tamanho de @p destino.
+ * @return 1 se leu, 0 se a entrada foi fechada (EOF).
+ */
 static int lerLinha(const char *mensagem, char *destino, size_t tam)
 {
     printf("%s", mensagem);
@@ -47,7 +57,16 @@ static int lerLinha(const char *mensagem, char *destino, size_t tam)
     return 1;
 }
 
-/** @brief Lê um texto não vazio e sem vírgula (a vírgula quebraria o CSV). */
+/**
+ * @brief Lê um texto não vazio e sem vírgula (a vírgula quebraria o CSV).
+ *
+ * Repete a pergunta até o usuário digitar um texto válido.
+ *
+ * @param mensagem Texto mostrado antes da leitura.
+ * @param destino  Onde o texto é guardado.
+ * @param tam      Tamanho de @p destino.
+ * @return 1 se leu, 0 se a entrada foi fechada (EOF).
+ */
 static int lerTexto(const char *mensagem, char *destino, size_t tam)
 {
     while (1)
@@ -74,7 +93,12 @@ static int lerTexto(const char *mensagem, char *destino, size_t tam)
     }
 }
 
-/** @brief Lê a letra da alternativa correta (A a D). Retorna 0 se der EOF. */
+/**
+ * @brief Lê a letra da alternativa correta (A a D), aceitando minúscula.
+ * @param mensagem Texto mostrado antes da leitura.
+ * @param letra    Recebe a letra em maiúscula.
+ * @return 1 se leu, 0 se a entrada foi fechada (EOF).
+ */
 static int lerLetra(const char *mensagem, char *letra)
 {
     char linha[16];
@@ -95,7 +119,12 @@ static int lerLetra(const char *mensagem, char *letra)
     }
 }
 
-/** @brief Lê um nível de 1 a 5. Retorna 0 se der EOF. */
+/**
+ * @brief Lê um nível de dificuldade de NIVEL_MIN a NIVEL_MAX.
+ * @param mensagem Texto mostrado antes da leitura.
+ * @param nivel    Recebe o nível.
+ * @return 1 se leu, 0 se a entrada foi fechada (EOF).
+ */
 static int lerNivel(const char *mensagem, int *nivel)
 {
     while (1)
@@ -114,7 +143,11 @@ static int lerNivel(const char *mensagem, int *nivel)
     }
 }
 
-/** @brief Calcula o próximo ID livre (maior ID existente + 1). */
+/**
+ * @brief Calcula o próximo ID livre (maior ID existente + 1).
+ * @param banco Banco de perguntas.
+ * @return O novo ID.
+ */
 static int proximoId(const Banco *banco)
 {
     int maior = 0;
@@ -128,7 +161,11 @@ static int proximoId(const Banco *banco)
     return maior + 1;
 }
 
-/** @brief Pede todos os campos de uma pergunta. Retorna 0 se der EOF. */
+/**
+ * @brief Pede ao usuário todos os campos de uma pergunta.
+ * @param p Pergunta a preencher (o id não é alterado).
+ * @return 1 se preencheu tudo, 0 se a entrada foi fechada no meio (EOF).
+ */
 static int preencherPergunta(Perguntas *p)
 {
     static const char letras[4] = {'A', 'B', 'C', 'D'};
@@ -154,7 +191,11 @@ static int preencherPergunta(Perguntas *p)
     return lerNivel("Nível (1-Muito Fácil, 2-Fácil, 3-Médio, 4-Difícil, 5-Muito Difícil): ", &p->nivel);
 }
 
-/** @brief Imprime o enunciado e as alternativas de uma pergunta. */
+/**
+ * @brief Imprime o enunciado e as 4 alternativas de uma pergunta.
+ * @param p                Pergunta.
+ * @param destacarCorreta  1 para marcar a alternativa correta em verde.
+ */
 static void imprimirPergunta(const Perguntas *p, int destacarCorreta)
 {
     static const char letras[4] = {'A', 'B', 'C', 'D'};
@@ -172,7 +213,10 @@ static void imprimirPergunta(const Perguntas *p, int destacarCorreta)
     }
 }
 
-/** @brief Mostra quantas perguntas existem por nível e o mínimo exigido. */
+/**
+ * @brief Mostra quantas perguntas existem por nível e quantas faltam para o mínimo.
+ * @param banco Banco de perguntas.
+ */
 static void mostrarResumoNiveis(const Banco *banco)
 {
     // mínimo de perguntas por nível exigido no enunciado do projeto
@@ -205,6 +249,10 @@ static void mostrarResumoNiveis(const Banco *banco)
  * Funções públicas
  * --------------------------------------------------------------- */
 
+/**
+ * @brief Toca um som curto: Beep no Windows, sino do terminal no Linux.
+ * @param tipo 1 = navegar, 2 = sucesso, 3 = erro, 4 = nível Muito Difícil.
+ */
 void tocarSom(int tipo)
 {
 #ifdef _WIN32
@@ -234,6 +282,11 @@ void tocarSom(int tipo)
 #endif
 }
 
+/**
+ * @brief Devolve a cor ANSI de um nível de dificuldade.
+ * @param nivel Nível de 1 a 5.
+ * @return Código da cor (COR_RESET se o nível for inválido).
+ */
 const char *obterCorNivel(int nivel)
 {
     switch (nivel)
@@ -253,6 +306,15 @@ const char *obterCorNivel(int nivel)
     }
 }
 
+/**
+ * @brief Lê um número inteiro digitado pelo usuário (linha inteira).
+ *
+ * Recusa entradas como "abc" ou "12abc".
+ *
+ * @param mensagem Texto mostrado antes da leitura.
+ * @param valor    Recebe o número lido.
+ * @return 1 se leu um número válido, 0 se não era número, -1 se EOF.
+ */
 int lerInteiro(const char *mensagem, int *valor)
 {
     char linha[64];
@@ -280,6 +342,10 @@ int lerInteiro(const char *mensagem, int *valor)
     return 1;
 }
 
+/**
+ * @brief Cadastra uma nova pergunta (o vetor dobra de tamanho se estiver cheio).
+ * @param banco Banco de perguntas.
+ */
 void cadastrarPergunta(Banco *banco)
 {
     // Se o vetor está cheio, aumenta a capacidade (dobra)
@@ -311,6 +377,10 @@ void cadastrarPergunta(Banco *banco)
     printf("%s[OK] Pergunta #%d cadastrada com sucesso!%s\n", COR_VERDE, nova.id, COR_RESET);
 }
 
+/**
+ * @brief Lista todas as perguntas com alternativas, resposta e resumo por nível.
+ * @param banco Banco de perguntas.
+ */
 void listarPerguntas(const Banco *banco)
 {
     if (banco->quantidade == 0)
@@ -337,6 +407,14 @@ void listarPerguntas(const Banco *banco)
     mostrarResumoNiveis(banco);
 }
 
+/**
+ * @brief Pesquisa por nível e navega entre as perguntas encontradas.
+ *
+ * Comandos: [A] anterior, [D] próxima, [R] revelar/ocultar resposta, [S] sair.
+ * Cada nível tem sua cor, e cada ação tem um som.
+ *
+ * @param banco Banco de perguntas.
+ */
 void pesquisarPergunta(const Banco *banco)
 {
     if (banco->quantidade == 0)
@@ -487,6 +565,14 @@ void pesquisarPergunta(const Banco *banco)
     limparTela();
 }
 
+/**
+ * @brief Altera a pergunta com o ID informado.
+ *
+ * Os novos dados são lidos em uma cópia: se a entrada fechar no meio, a
+ * pergunta original não é estragada.
+ *
+ * @param banco Banco de perguntas.
+ */
 void alterarPergunta(Banco *banco)
 {
     if (banco->quantidade == 0)
@@ -534,6 +620,13 @@ void alterarPergunta(Banco *banco)
     printf("%s[OK] Pergunta #%d alterada com sucesso!%s\n", COR_VERDE, id, COR_RESET);
 }
 
+/**
+ * @brief Exclui a pergunta com o ID informado, após confirmação.
+ *
+ * Se o vetor ficar com 1/4 ou menos de uso, a capacidade cai pela metade.
+ *
+ * @param banco Banco de perguntas.
+ */
 void excluirPergunta(Banco *banco)
 {
     if (banco->quantidade == 0)
@@ -599,6 +692,10 @@ void excluirPergunta(Banco *banco)
     printf("%s[OK] Pergunta #%d excluída com sucesso!%s\n", COR_VERDE, id, COR_RESET);
 }
 
+/**
+ * @brief Pede um nome de arquivo e exporta o banco em .csv.
+ * @param banco Banco de perguntas.
+ */
 void exportarPerguntas(const Banco *banco)
 {
     char nome[TAM_CAMINHO];

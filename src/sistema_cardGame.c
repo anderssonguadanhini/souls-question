@@ -59,7 +59,7 @@ static int respostaCorreta(char resposta, const CardGame *card)
  *            a funcao devolve @p min (evita divisao por zero).
  * @return Inteiro sorteado entre min e max.
  */
-int sortear(int min, int max)
+static int sortear(int min, int max)
 {
     if (max < min)
     {
