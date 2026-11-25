@@ -3,7 +3,7 @@ flameChaos
 flameChaos.exe
 
 # Dados gravados ao sair do programa (gerados a partir do CSV)
-perguntas.bin
+perguntas.dat
 
 # Documentação gerada pelo Doxygen (make docs)
 docs/

@@ -62,15 +62,15 @@ typedef struct
 /** @brief Um inimigo da arena (Hollows e chefes). */
 typedef struct
 {
-    int id;                ///< Identificador (também desincroniza as animações).
-    char nome[48];         ///< Nome mostrado na tela.
-    Vector2 pos;           ///< Posição (base/pés).
-    int poder;             ///< Poder necessário para vencê-lo.
-    int nivelDificuldade;  ///< Dificuldade de 1 a 5 (usada no visual).
-    int derrotado;         ///< 1 depois de vencido (some da arena).
-    int ehChefe;           ///< 1 para chefes (Sif e Gwyn): maiores e com hitbox maior.
-    Texture2D texInimigo;  ///< Sprite do inimigo.
-    int temTexInimigo;     ///< 1 se texInimigo foi carregado.
+    int id;               ///< Identificador (também desincroniza as animações).
+    char nome[48];        ///< Nome mostrado na tela.
+    Vector2 pos;          ///< Posição (base/pés).
+    int poder;            ///< Poder necessário para vencê-lo.
+    int nivelDificuldade; ///< Dificuldade de 1 a 5 (usada no visual).
+    int derrotado;        ///< 1 depois de vencido (some da arena).
+    int ehChefe;          ///< 1 para chefes (Sif e Gwyn): maiores e com hitbox maior.
+    Texture2D texInimigo; ///< Sprite do inimigo.
+    int temTexInimigo;    ///< 1 se texInimigo foi carregado.
 } Inimigo;
 
 /** @brief Um item coletável (baú ou espada). */
@@ -2342,134 +2342,149 @@ static void desenharInimigo(const Inimigo *ini, int selecionado)
  * @param largTela Largura da tela.
  * @param altTela  Altura da tela.
  */
+/**
+ * @brief Gera inimigos (incluindo Sif extra) e itens espalhados por toda a arena.
+ */
 static void gerarInimigosAleatorios(Arena *arena, float largTela, float altTela)
 {
-    arena->vitoriaArena = 0;
-
-    int poderInicial = PODER_INICIAL_HEROI; // Herói sempre começa em 5
-
-    // Sorteia o teto de poder do chefe final (Gwyn) entre 35 e 9999999.
-    // Sorteia primeiro a faixa (4 níveis de grandeza) para valores pequenos também aparecerem
-    // com frequência; sortear direto em 35..9999999 quase sempre daria números enormes.
-    int faixa = GetRandomValue(1, 4);
-    int alvoGwyn = 60;
-    if (faixa == 1)
-        alvoGwyn = sortearPoderAteMaximo(35, 300);
-    else if (faixa == 2)
-        alvoGwyn = sortearPoderAteMaximo(301, 25000);
-    else if (faixa == 3)
-        alvoGwyn = sortearPoderAteMaximo(25001, 750000);
-    else
-        alvoGwyn = sortearPoderAteMaximo(750001, PODER_MAX_INIMIGO);
-
-    // 1. Hollow Faca sempre vencível logo de início pelo herói (poder 1 a 5)
-    int poderFaca = GetRandomValue(1, poderInicial);
-
-    // 2. Baú 1 + Hollow Tocha (vencível após Hollow Faca + Baú 1)
-    int bau1 = GetRandomValue(3, 8);
-    long long poderAposFacaEBau1 = (long long)poderInicial + poderFaca + bau1;
-    int poderTocha = clampIntMax(poderAposFacaEBau1 * GetRandomValue(65, 92) / 100, poderFaca + 1, PODER_MAX_INIMIGO - 10);
-
-    // 3. Baú 2 e Espada Multiplicadora escalam a partir do 5 inicial para permitir alcançar Sif e Gwyn até 9999999
-    long long poderAposTocha = poderAposFacaEBau1 + poderTocha;
-    int bau2 = GetRandomValue(6, 20);
-    long long baseAntesMult = poderAposTocha + bau2;
-
-    // O multiplicador da espada é calculado para o herói conseguir alcançar o poder do Gwyn sorteado
-    int multArma = 4;
-    if (alvoGwyn > 300)
-    {
-        long long multNecessario = (alvoGwyn / (baseAntesMult * 2)) + GetRandomValue(2, 4);
-        multArma = clampIntMax(multNecessario, 4, 350000);
-    }
-    else
-    {
-        multArma = GetRandomValue(3, 5);
-    }
-
-    long long poderPreSif = baseAntesMult;
-    long long poderComEspada = poderPreSif * (long long)multArma;
-
-    // 4. Sif: fica entre a forma pré-espada e a forma com espada, garantindo vitória na ordem certa
-    long long minSif = poderPreSif + 2;
-    long long maxSif = (poderComEspada * 65) / 100;
-    if (maxSif < minSif)
-        maxSif = minSif;
-    int poderSif = clampIntMax(minSif + (long long)((double)(maxSif - minSif) * (GetRandomValue(20, 80) / 100.0)),
-                               poderTocha + 2, PODER_MAX_INIMIGO - 5);
-
-    // 5. Gwyn: chefe final (até 9999999), vencível após coletar os itens e derrotar o Sif
-    long long poderMaxAntesGwyn = poderComEspada + poderSif;
-    int poderGwyn = clampIntMax(poderMaxAntesGwyn * GetRandomValue(68, 86) / 100, poderSif + 5, PODER_MAX_INIMIGO);
-
-    // Limiares de evolução visual:
-    // Forma Suprema (3) ativa ao derrotar o Sif (unindo-se a ele) ou atingir 75% do poder do Gwyn antes de enfrentá-lo
-    arena->limiarEspada1 = clampIntMax((long long)poderInicial + bau1, poderInicial + 1, PODER_MAX_INIMIGO);
-    arena->limiarEspada2 = clampIntMax(poderPreSif, arena->limiarEspada1 + 1, PODER_MAX_INIMIGO);
-    arena->limiarFormaFinal = clampIntMax((long long)poderGwyn * 75 / 100, arena->limiarEspada2 + 1, poderGwyn);
-
     Vector2 ocupados[32];
     int qtdOcupados = 0;
 
-    arena->heroi.pos = sortearPosicaoLivre(ocupados, &qtdOcupados, largTela, altTela, 125.0f);
+    // 1. Posição inicial do Herói
+    arena->heroi.pos = (Vector2){largTela * 0.72f, altTela * 0.36f};
     arena->heroi.destino = arena->heroi.pos;
     arena->heroi.movendo = 0;
-    arena->heroi.direcaoX = 1;
-    arena->heroi.velocidade = 360.0f;
+    arena->heroi.direcaoX = -1;
+    arena->heroi.velocidade = 260.0f;
     arena->heroi.inimigoAlvoIdx = -1;
     arena->heroi.itemAlvoIdx = -1;
-    arena->heroi.timerAtaque = 0.0f;
-    arena->heroi.timerRecuo = 0.0f;
-    arena->heroi.timerLevelUp = 0.0f;
-    arena->heroi.poder = PODER_INICIAL_HEROI; // Sempre 5
+    arena->heroi.poder = PODER_INICIAL_HEROI;
     arena->heroi.nivelArma = 0;
     arena->heroi.estagioEvolucao = 0;
     arena->heroi.derrotouSif = 0;
     arena->heroi.vivo = 1;
+    ocupados[qtdOcupados++] = arena->heroi.pos;
 
-    arena->qtdItens = 3;
-
-    arena->itens[0].id = 1;
-    strcpy(arena->itens[0].nome, "Bau de Almas Pequeno");
-    arena->itens[0].tipo = TIPO_ITEM_BAU;
-    arena->itens[0].pos = sortearPosicaoLivre(ocupados, &qtdOcupados, largTela, altTela, 115.0f);
-    arena->itens[0].bonusPoder = bau1;
-    arena->itens[0].multiplicador = 1;
-    arena->itens[0].coletado = 0;
-
-    arena->itens[1].id = 2;
-    strcpy(arena->itens[1].nome, "Bau de Almas Grande");
-    arena->itens[1].tipo = TIPO_ITEM_BAU;
-    arena->itens[1].pos = sortearPosicaoLivre(ocupados, &qtdOcupados, largTela, altTela, 115.0f);
-    arena->itens[1].bonusPoder = bau2;
-    arena->itens[1].multiplicador = 1;
-    arena->itens[1].coletado = 0;
-
-    arena->itens[2].id = 3;
-    snprintf(arena->itens[2].nome, sizeof(arena->itens[2].nome), "Espada do Abismo x%d", multArma);
-    arena->itens[2].tipo = TIPO_ITEM_ARMA_MULT;
-    arena->itens[2].pos = sortearPosicaoLivre(ocupados, &qtdOcupados, largTela, altTela, 115.0f);
-    arena->itens[2].bonusPoder = 0;
-    arena->itens[2].multiplicador = multArma;
-    arena->itens[2].coletado = 0;
-
-    arena->qtdInimigos = 4;
-
-    arena->inimigos[0].pos = sortearPosicaoLivre(ocupados, &qtdOcupados, largTela, altTela, 125.0f);
-    arena->inimigos[0].poder = poderFaca;
+    // 2. Configura os 4 inimigos fixos (0: Hollow Faca, 1: Hollow Tocha, 2: Sif, 3: Gwyn)
+    arena->inimigos[0].poder = GetRandomValue(3, 5);
     arena->inimigos[0].derrotado = 0;
+    arena->inimigos[0].pos = sortearPosicaoLivre(ocupados, &qtdOcupados, largTela, altTela, 95.0f);
 
-    arena->inimigos[1].pos = sortearPosicaoLivre(ocupados, &qtdOcupados, largTela, altTela, 125.0f);
-    arena->inimigos[1].poder = poderTocha;
+    arena->inimigos[1].poder = GetRandomValue(6, 12);
     arena->inimigos[1].derrotado = 0;
+    arena->inimigos[1].pos = sortearPosicaoLivre(ocupados, &qtdOcupados, largTela, altTela, 95.0f);
 
-    arena->inimigos[2].pos = sortearPosicaoLivre(ocupados, &qtdOcupados, largTela, altTela, 135.0f);
-    arena->inimigos[2].poder = poderSif;
+    // Sif principal (Chefe)
+    arena->inimigos[2].poder = GetRandomValue(45, 90);
     arena->inimigos[2].derrotado = 0;
+    arena->inimigos[2].ehChefe = 1;
+    arena->inimigos[2].pos = (Vector2){largTela * 0.25f, altTela * 0.34f};
+    ocupados[qtdOcupados++] = arena->inimigos[2].pos;
 
-    arena->inimigos[3].pos = sortearPosicaoLivre(ocupados, &qtdOcupados, largTela, altTela, 145.0f);
-    arena->inimigos[3].poder = poderGwyn;
+    // Gwyn (Chefe final na arena)
+    arena->inimigos[3].poder = sortearPoderAteMaximo(500, 2500);
     arena->inimigos[3].derrotado = 0;
+    arena->inimigos[3].ehChefe = 1;
+    arena->inimigos[3].pos = (Vector2){largTela * 0.84f, altTela * 0.56f};
+    ocupados[qtdOcupados++] = arena->inimigos[3].pos;
+
+    // 3. Adiciona mais 8 inimigos espalhados pela arena (incluindo mais um Sif)
+    int totalInimigos = 12;
+    if (totalInimigos > MAX_INIMIGOS)
+        totalInimigos = MAX_INIMIGOS;
+
+    const Vector2 pontosExtras[8] = {
+        {largTela * 0.16f, altTela * 0.72f}, // Ruínas inferiores esquerda
+        {largTela * 0.48f, altTela * 0.44f}, // Centro da arena (fogueira principal)
+        {largTela * 0.52f, altTela * 0.75f}, // Plataforma inferior central
+        {largTela * 0.72f, altTela * 0.72f}, // Fogueira inferior direita
+        {largTela * 0.34f, altTela * 0.58f}, // Escadaria esquerda
+        {largTela * 0.62f, altTela * 0.52f}, // Entrada direita da arena
+        {largTela * 0.42f, altTela * 0.68f}, // Escadaria central
+        {largTela * 0.20f, altTela * 0.54f}  // Platô esquerdo (segundo Sif)
+    };
+
+    for (int i = 4; i < totalInimigos; i++)
+    {
+        if (i == 11)
+        {
+            // Coloca mais um Sif como guardião extra
+            arena->inimigos[i] = arena->inimigos[2];
+            arena->inimigos[i].id = i + 1;
+            strcpy(arena->inimigos[i].nome, "Sif Guardiao");
+            arena->inimigos[i].ehChefe = 1;
+            arena->inimigos[i].nivelDificuldade = 4;
+            arena->inimigos[i].derrotado = 0;
+            arena->inimigos[i].poder = GetRandomValue(150, 350);
+            arena->inimigos[i].pos = pontosExtras[i - 4];
+        }
+        else
+        {
+            int tipoBase = (i % 2 == 0) ? 0 : 1; // Alterna entre Hollow Faca (0) e Hollow Tocha (1)
+            arena->inimigos[i] = arena->inimigos[tipoBase];
+            arena->inimigos[i].id = i + 1;
+            arena->inimigos[i].ehChefe = 0;
+            arena->inimigos[i].derrotado = 0;
+
+            if (i < 7)
+            {
+                arena->inimigos[i].nivelDificuldade = 1;
+                arena->inimigos[i].poder = GetRandomValue(4, 15);
+            }
+            else if (i < 10)
+            {
+                arena->inimigos[i].nivelDificuldade = 2;
+                arena->inimigos[i].poder = GetRandomValue(18, 60);
+            }
+            else
+            {
+                arena->inimigos[i].nivelDificuldade = 3;
+                arena->inimigos[i].poder = GetRandomValue(70, 140);
+            }
+
+            Vector2 base = pontosExtras[i - 4];
+            arena->inimigos[i].pos = (Vector2){
+                base.x + (float)GetRandomValue(-25, 25),
+                base.y + (float)GetRandomValue(-18, 18)};
+        }
+
+        if (qtdOcupados < 32)
+            ocupados[qtdOcupados++] = arena->inimigos[i].pos;
+    }
+    arena->qtdInimigos = totalInimigos;
+
+    // 4. Gera 10 itens espalhados (7 baús de soma + 3 espadas multiplicadoras)
+    int totalItens = 10;
+    if (totalItens > MAX_ITENS)
+        totalItens = MAX_ITENS;
+
+    for (int i = 0; i < totalItens; i++)
+    {
+        memset(&arena->itens[i], 0, sizeof(Item));
+        arena->itens[i].id = i + 1;
+        arena->itens[i].coletado = 0;
+        arena->itens[i].pos = sortearPosicaoLivre(ocupados, &qtdOcupados, largTela, altTela, 75.0f);
+
+        if (i == 2 || i == 6 || i == 9)
+        {
+            arena->itens[i].tipo = TIPO_ITEM_ARMA_MULT;
+            strcpy(arena->itens[i].nome, "Espada Reluzente");
+            arena->itens[i].multiplicador = (i == 9) ? GetRandomValue(6, 10) : GetRandomValue(2, 5);
+        }
+        else
+        {
+            arena->itens[i].tipo = TIPO_ITEM_BAU;
+            strcpy(arena->itens[i].nome, "Bau de Almas");
+            arena->itens[i].bonusPoder = GetRandomValue(3, 25);
+        }
+    }
+    arena->qtdItens = totalItens;
+
+    // 5. Limiares de evolução visual do herói
+    arena->limiarEspada1 = 15;
+    arena->limiarEspada2 = 80;
+    arena->limiarFormaFinal = 400;
+    arena->vitoriaArena = 0;
 }
 
 /**
@@ -2525,6 +2540,86 @@ static void alternarTelaCheia(Arena *arena, float *largTela, float *altTela)
     }
 }
 
+/**
+ * @brief Desenha os 10 Hollows chorando espalhados no chão da arena, em tamanho menor e com lágrimas no rosto.
+ */
+/**
+ * @brief Desenha os 10 Hollows chorando espalhados no chão ao fundo da arena, pequenos e com lágrimas nítidas.
+ */
+/**
+ * @brief Desenha os 10 Hollows chorando espalhados na encosta ao fundo à direita (ponto de referência), um pouco maiores.
+ */
+static void desenharHollowsChorandoFundo(Texture2D texHollowChorando, int temTex, float largTela, float altTela)
+{
+    static int inicializado = 0;
+    static float posXRel[10];
+    static float posYRel[10];
+    static float escalaRel[10];
+    static int flipX[10];
+
+    // Sorteia posições aleatórias na encosta ao fundo à direita (usando o cursor como referência)
+    if (!inicializado)
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            posXRel[i] = (float)GetRandomValue(66, 94) / 100.0f;   // Região direita ao fundo
+            posYRel[i] = (float)GetRandomValue(22, 36) / 100.0f;   // Platô/encosta acima do Sif
+            escalaRel[i] = (float)GetRandomValue(10, 13) / 100.0f; // Um pouco maiores (10% a 13%)
+            flipX[i] = GetRandomValue(0, 1) ? 1 : -1;              // Lado aleatório
+        }
+        inicializado = 1;
+    }
+
+    float tempo = (float)GetTime();
+
+    for (int i = 0; i < 10; i++)
+    {
+        float x = largTela * posXRel[i];
+        float y = altTela * posYRel[i];
+        float soluco = sinf(tempo * 5.2f + i * 1.7f) * 1.4f;
+
+        // Sombra proporcional nos pés
+        DrawEllipse((int)x, (int)y, 13.0f, 4.5f, (Color){0, 0, 0, 150});
+
+        float wDesenhado = 34.0f;
+        float hDesenhado = 76.0f;
+
+        if (temTex && texHollowChorando.id > 0)
+        {
+            wDesenhado = texHollowChorando.width * escalaRel[i];
+            hDesenhado = texHollowChorando.height * escalaRel[i];
+
+            Rectangle src = {
+                0.0f,
+                0.0f,
+                (float)texHollowChorando.width * flipX[i],
+                (float)texHollowChorando.height};
+            Rectangle dst = {x - wDesenhado * 0.5f, y - hDesenhado + soluco, wDesenhado, hDesenhado};
+            DrawTexturePro(texHollowChorando, src, dst, (Vector2){0.0f, 0.0f}, 0.0f, (Color){205, 210, 225, 245});
+        }
+        else
+        {
+            DrawCircle((int)x, (int)(y - 18.0f + soluco), 11.0f, (Color){75, 70, 68, 235});
+            DrawCircle((int)x, (int)(y - 34.0f + soluco * 1.2f), 8.0f, (Color){115, 108, 100, 240});
+        }
+
+        // Lágrimas saindo do rosto/mãos (acompanhando o lado para onde o Hollow olha)
+        float rostoX = x + (flipX[i] * wDesenhado * 0.16f);
+        float rostoY = y - (hDesenhado * 0.84f) + soluco;
+        float quedaMax = hDesenhado * 0.42f;
+
+        float gota1 = fmodf(tempo * 28.0f + i * 9.0f, quedaMax);
+        float gota2 = fmodf(tempo * 28.0f + i * 9.0f + (quedaMax * 0.5f), quedaMax);
+
+        // Gota 1
+        DrawCircle((int)(rostoX - 2.2f), (int)(rostoY + gota1), 2.2f, (Color){90, 185, 255, 235});
+        DrawCircle((int)(rostoX - 2.2f), (int)(rostoY + gota1), 1.0f, (Color){225, 245, 255, 255});
+
+        // Gota 2
+        DrawCircle((int)(rostoX + 2.2f), (int)(rostoY + gota2), 2.2f, (Color){90, 185, 255, 235});
+        DrawCircle((int)(rostoX + 2.2f), (int)(rostoY + gota2), 1.0f, (Color){225, 245, 255, 255});
+    }
+}
 /**
  * @brief Abre a janela do raylib e roda a arena até o jogador sair.
  *
@@ -2636,8 +2731,30 @@ void executarInterfaceGrafica(Banco *banco)
     arena.inimigos[3].ehChefe = 1;
     arena.inimigos[3].texInimigo = carregarSpriteRecortado("assets/Gwyn.png", &arena.inimigos[3].temTexInimigo);
 
+    // Textura opcional dos 10 Hollows chorando ao fundo
+    int temTexHollowChorando = 0;
+    Texture2D texHollowChorando = {0};
+    const char *caminhosHollowChorando[4] = {
+        "assets/Hollow chorado.png",
+        "assets/hollow_chorado.png",
+        "../assets/Hollow chorado.png",
+        "Hollow chorado.png"};
+
+    for (int i = 0; i < 4; i++)
+    {
+        texHollowChorando = carregarSpriteRecortado(caminhosHollowChorando[i], &temTexHollowChorando);
+        if (temTexHollowChorando)
+            break;
+    }
+
     // Gera inimigos aleatórios (poder até 9999999) com herói começando em 5
     gerarInimigosAleatorios(&arena, largTela, altTela);
+
+    // Posiciona o Gwyn em um local fixo na arena (altar/trono à direita)
+    if (arena.qtdInimigos > 3)
+    {
+        arena.inimigos[3].pos = (Vector2){largTela * 0.84f, altTela * 0.56f};
+    }
 
     int sair = 0;
 
@@ -2649,11 +2766,21 @@ void executarInterfaceGrafica(Banco *banco)
         if (IsKeyPressed(KEY_F11))
         {
             alternarTelaCheia(&arena, &largTela, &altTela);
+            if (arena.qtdInimigos > 3)
+            {
+                arena.inimigos[3].pos = (Vector2){largTela * 0.84f, altTela * 0.56f};
+            }
         }
         else if (IsKeyPressed(KEY_ESCAPE))
         {
             if (IsWindowFullscreen())
+            {
                 alternarTelaCheia(&arena, &largTela, &altTela);
+                if (arena.qtdInimigos > 3)
+                {
+                    arena.inimigos[3].pos = (Vector2){largTela * 0.84f, altTela * 0.56f};
+                }
+            }
             else
                 sair = 1;
         }
@@ -2679,6 +2806,9 @@ void executarInterfaceGrafica(Banco *banco)
             Rectangle dst = {0.0f, 0.0f, largTela, altTela};
             DrawTexturePro(arena.cenario.texCenario, src, dst, (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
         }
+
+        // 10 Hollows chorando ao fundo da arena
+        desenharHollowsChorandoFundo(texHollowChorando, temTexHollowChorando, largTela, altTela);
 
         for (int i = 0; i < arena.qtdItens; i++)
         {
@@ -2722,6 +2852,8 @@ void executarInterfaceGrafica(Banco *banco)
         if (arena.itens[i].temTexItem)
             UnloadTexture(arena.itens[i].texItem);
     }
+    if (temTexHollowChorando)
+        UnloadTexture(texHollowChorando);
     if (arena.heroi.temTexHeroi)
         UnloadTexture(arena.heroi.texHeroi);
     if (arena.heroi.temTexHeroiEspada1)
