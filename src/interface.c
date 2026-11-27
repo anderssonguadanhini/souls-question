@@ -2647,6 +2647,31 @@ void executarInterfaceGrafica(Banco *banco)
     EnableCursor();
     SetExitKey(KEY_NULL); // ESC nao fecha mais o jogo direto
 
+    // Inicia o áudio e carrega a música de fundo (assets/musica/2ffdd.mp3)
+    InitAudioDevice();
+    Music musicaArena = {0};
+    int temMusica = 0;
+    const char *caminhosMusica[4] = {
+        "assets/musica/2ffdd.mp3",
+        "../assets/musica/2ffdd.mp3",
+        "musica/2ffdd.mp3",
+        "2ffdd.mp3"};
+    for (int i = 0; i < 4; i++)
+    {
+        if (FileExists(caminhosMusica[i]))
+        {
+            musicaArena = LoadMusicStream(caminhosMusica[i]);
+            if (musicaArena.stream.buffer != NULL)
+            {
+                musicaArena.looping = true;
+                SetMusicVolume(musicaArena, 0.45f);
+                PlayMusicStream(musicaArena);
+                temMusica = 1;
+                break;
+            }
+        }
+    }
+
     // Cartas: precisa da janela criada (gera as texturas das costas)
     cartasInicializar(banco);
 
@@ -2739,7 +2764,6 @@ void executarInterfaceGrafica(Banco *banco)
         "assets/hollow_chorado.png",
         "../assets/Hollow chorado.png",
         "Hollow chorado.png"};
-
     for (int i = 0; i < 4; i++)
     {
         texHollowChorando = carregarSpriteRecortado(caminhosHollowChorando[i], &temTexHollowChorando);
@@ -2750,7 +2774,7 @@ void executarInterfaceGrafica(Banco *banco)
     // Gera inimigos aleatórios (poder até 9999999) com herói começando em 5
     gerarInimigosAleatorios(&arena, largTela, altTela);
 
-    // Posiciona o Gwyn em um local fixo na arena (altar/trono à direita)
+    // Posiciona o Gwyn em um local fixo na arena
     if (arena.qtdInimigos > 3)
     {
         arena.inimigos[3].pos = (Vector2){largTela * 0.84f, altTela * 0.56f};
@@ -2761,6 +2785,11 @@ void executarInterfaceGrafica(Banco *banco)
     while (!WindowShouldClose() && !sair)
     {
         float dt = GetFrameTime();
+
+        if (temMusica)
+        {
+            UpdateMusicStream(musicaArena);
+        }
 
         // F11: alterna tela cheia / janela | ESC: sai da tela cheia (ou fecha o jogo se ja estiver em janela)
         if (IsKeyPressed(KEY_F11))
@@ -2807,7 +2836,7 @@ void executarInterfaceGrafica(Banco *banco)
             DrawTexturePro(arena.cenario.texCenario, src, dst, (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
         }
 
-        // 10 Hollows chorando ao fundo da arena
+        // 10 Hollows chorando ao fundo
         desenharHollowsChorandoFundo(texHollowChorando, temTexHollowChorando, largTela, altTela);
 
         for (int i = 0; i < arena.qtdItens; i++)
@@ -2842,7 +2871,7 @@ void executarInterfaceGrafica(Banco *banco)
         EndDrawing();
     }
 
-    for (int i = 0; i < arena.qtdInimigos; i++)
+    for (int i = 0; i < 4 && i < arena.qtdInimigos; i++)
     {
         if (arena.inimigos[i].temTexInimigo)
             UnloadTexture(arena.inimigos[i].texInimigo);
@@ -2864,6 +2893,14 @@ void executarInterfaceGrafica(Banco *banco)
         UnloadTexture(arena.heroi.texHeroiFinal);
     if (arena.cenario.temCenario)
         UnloadTexture(arena.cenario.texCenario);
+
+    if (temMusica)
+    {
+        StopMusicStream(musicaArena);
+        UnloadMusicStream(musicaArena);
+    }
+    CloseAudioDevice();
+
     cartasFinalizar();
     CloseWindow();
 }
